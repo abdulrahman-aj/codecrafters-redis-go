@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"net"
 	"os"
 )
@@ -19,16 +21,61 @@ func main() {
 		fmt.Println("Failed to bind to port 6379")
 		os.Exit(1)
 	}
-	conn, err := l.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
-	}
 
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			os.Exit(1)
+		}
+
+		handleConnection(conn)
+	}
+}
+
+func handleConnection(conn net.Conn) {
 	defer conn.Close()
 
-	if _, err := conn.Write([]byte("+PONG\r\n")); err != nil {
-		fmt.Println("Error writing to connection: ", err.Error())
-		os.Exit(1)
+	reader := bufio.NewReader(conn)
+
+	for {
+		err := consumeCommand(reader)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			fmt.Println("Error reading from connection: ", err.Error())
+			return
+		}
+		if _, err := conn.Write([]byte("+PONG\r\n")); err != nil {
+			fmt.Println("Error writing to connection: ", err.Error())
+			break
+		}
 	}
+
+}
+
+func consumeCommand(reader *bufio.Reader) error {
+	for range 3 {
+		_, err := readline(reader)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func readline(reader *bufio.Reader) ([]byte, error) {
+	var ret []byte
+	for {
+		bytes, isPrefix, err := reader.ReadLine()
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, bytes...)
+		if !isPrefix {
+			break
+		}
+	}
+	return ret, nil
 }
