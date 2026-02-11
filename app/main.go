@@ -6,14 +6,11 @@ import (
 	"io"
 	"net"
 	"os"
+
+	"github.com/codecrafters-io/redis-starter-go/app/server"
 )
 
-// Ensures gofmt doesn't remove the "net" and "os" imports in stage 1 (feel free to remove this!)
-var _ = net.Listen
-var _ = os.Exit
-
 func main() {
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
 	fmt.Println("Logs from your program will appear here!")
 
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
@@ -22,6 +19,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	srv := server.New()
+	go srv.Run()
+
 	for {
 		conn, err := l.Accept()
 		if err != nil {
@@ -29,11 +29,11 @@ func main() {
 			os.Exit(1)
 		}
 
-		handleConnection(conn)
+		go handleConnection(srv, conn)
 	}
 }
 
-func handleConnection(conn net.Conn) {
+func handleConnection(srv *server.Server, conn net.Conn) {
 	defer conn.Close()
 
 	reader := bufio.NewReader(conn)
@@ -47,7 +47,9 @@ func handleConnection(conn net.Conn) {
 			fmt.Println("Error reading from connection: ", err.Error())
 			return
 		}
-		if _, err := conn.Write([]byte("+PONG\r\n")); err != nil {
+
+		response := srv.Do(nil)
+		if _, err := conn.Write([]byte(response)); err != nil {
 			fmt.Println("Error writing to connection: ", err.Error())
 			break
 		}
