@@ -1,8 +1,10 @@
 package server
 
+import "github.com/codecrafters-io/redis-starter-go/app/resp"
+
 type request struct {
-	command    []string
-	responseCh chan<- string
+	command    any
+	responseCh chan<- []byte
 }
 
 type Server struct {
@@ -15,12 +17,12 @@ func New() *Server {
 
 func (s *Server) Run() {
 	for req := range s.requests {
-		req.responseCh <- s.handle(req.command)
+		req.responseCh <- handle(req.command)
 	}
 }
 
-func (s *Server) Do(command []string) string {
-	ch := make(chan string)
+func (s *Server) Do(command any) []byte {
+	ch := make(chan []byte)
 	req := &request{
 		command:    command,
 		responseCh: ch,
@@ -30,6 +32,31 @@ func (s *Server) Do(command []string) string {
 	return <-ch
 }
 
-func (s *Server) handle(command []string) string {
-	return "+PONG\r\n"
+func handle(argsAny any) []byte {
+	args, ok := argsAny.([]any)
+	if !ok || len(args) == 0 {
+		panic("TODO: Handle errors properly")
+	}
+
+	command, ok := args[0].(string)
+	if !ok {
+		panic("TODO: Handle errors properly")
+	}
+
+	args = args[1:]
+	switch command {
+	case "PING":
+		return []byte("+PONG\r\n")
+	case "ECHO":
+		if len(args) != 1 {
+			panic("TODO: Handle errors properly")
+		}
+		arg, ok := args[0].(string)
+		if !ok {
+			panic("TODO: Handle errors properly")
+		}
+		return resp.SerializeBulkString(arg)
+	default:
+		panic("TODO: Handle errors properly")
+	}
 }

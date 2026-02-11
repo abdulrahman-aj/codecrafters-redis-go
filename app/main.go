@@ -1,12 +1,12 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"net"
 	"os"
 
+	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server"
 )
 
@@ -36,10 +36,10 @@ func main() {
 func handleConnection(srv *server.Server, conn net.Conn) {
 	defer conn.Close()
 
-	reader := bufio.NewReader(conn)
+	reader := resp.NewReader(conn)
 
 	for {
-		err := consumeCommand(reader)
+		command, err := reader.ReadValue()
 		if err == io.EOF {
 			break
 		}
@@ -48,36 +48,10 @@ func handleConnection(srv *server.Server, conn net.Conn) {
 			return
 		}
 
-		response := srv.Do(nil)
-		if _, err := conn.Write([]byte(response)); err != nil {
+		if _, err := conn.Write(srv.Do(command)); err != nil {
 			fmt.Println("Error writing to connection: ", err.Error())
 			break
 		}
 	}
 
-}
-
-func consumeCommand(reader *bufio.Reader) error {
-	for range 3 {
-		_, err := readline(reader)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func readline(reader *bufio.Reader) ([]byte, error) {
-	var ret []byte
-	for {
-		bytes, isPrefix, err := reader.ReadLine()
-		if err != nil {
-			return nil, err
-		}
-		ret = append(ret, bytes...)
-		if !isPrefix {
-			break
-		}
-	}
-	return ret, nil
 }
