@@ -110,4 +110,4 @@ func BulkString(v string) []byte {
 	return fmt.Appendf(nil, "$%d\r\n%s\r\n", len(v), v)
 }
 
-var Null = []byte("$-1\r\n")
+var NullBulkString = []byte("$-1\r\n")
