@@ -9,7 +9,7 @@ import (
 
 type Server struct {
 	requests chan *request
-	storage  map[string]entry
+	storage  map[string]entry // TODO: need to empty this map periodically as it will cause a memory leak
 }
 
 type entry struct {
