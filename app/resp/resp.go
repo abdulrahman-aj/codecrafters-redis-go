@@ -102,6 +102,12 @@ func readLength(reader *bufio.Reader) (int, error) {
 	return length, nil
 }
 
-func SerializeBulkString(v string) []byte {
+func SimpleString(v string) []byte {
+	return fmt.Appendf(nil, "+%s\r\n", v)
+}
+
+func BulkString(v string) []byte {
 	return fmt.Appendf(nil, "$%d\r\n%s\r\n", len(v), v)
 }
+
+var Null = []byte("$-1\r\n")
