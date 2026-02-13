@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"time"
 
@@ -90,6 +91,33 @@ func (s *Server) handleRpush(command string, args []string) []byte {
 	}
 
 	list = append(list, args[1:]...)
+	e.value = list
+	s.storage[key] = e
+
+	return resp.Integer(len(list))
+}
+
+func (s *Server) handleLpush(command string, args []string) []byte {
+	if len(args) < 2 {
+		return errNumArgs(command)
+	}
+
+	key := args[0]
+
+	e, ok := s.storage[key]
+	if !ok {
+		e = entry{value: []string{}}
+	}
+
+	list, ok := e.value.([]string)
+	if !ok {
+		return errWrongType
+	}
+
+	elems := args[1:]
+	slices.Reverse(elems)
+
+	list = append(elems, list...) // TODO: consider using a linked-list to optimize this
 	e.value = list
 	s.storage[key] = e
 
