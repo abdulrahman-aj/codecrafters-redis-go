@@ -4,12 +4,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codecrafters-io/redis-starter-go/app/containers"
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 )
 
 type Server struct {
-	requests chan *request
-	storage  map[string]entry // TODO: need to empty this map periodically as it will cause a memory leak
+	inbox     chan *request
+	storage   map[string]entry                    // TODO: need to empty this map periodically as it will cause a memory leak
+	blockedBy map[string][]*request               // TODO: memory leak here. need to shrink to fit
+	unblocked *containers.PriorityQueue[*request] // TODO: memory leak here. need to shrink to fit
 }
 
 type entry struct {
@@ -18,61 +21,100 @@ type entry struct {
 }
 
 type request struct {
-	command    any
-	responseCh chan<- []byte
+	command     string
+	args        []string
+	responseCh  chan<- []byte
+	requestedAt time.Time
+}
+
+type response struct {
+	bytes       []byte
+	waitingOn   string
+	touchedKeys []string
 }
 
 func New() *Server {
 	return &Server{
-		requests: make(chan *request),
-		storage:  map[string]entry{},
+		inbox:     make(chan *request),
+		storage:   map[string]entry{},
+		blockedBy: map[string][]*request{},
+		unblocked: containers.NewPriorityQueue(func(a, b *request) bool {
+			return a.requestedAt.Before(b.requestedAt)
+		}),
 	}
 }
 
 func (s *Server) Run() {
-	for req := range s.requests {
-		req.responseCh <- s.handle(req.command)
+	for req := range s.inbox {
+		s.handle(req)
+
+		for s.unblocked.Len() != 0 {
+			req, _ := s.unblocked.Pop()
+			s.handle(req)
+		}
 	}
 }
 
-func (s *Server) Do(command any) []byte {
-	ch := make(chan []byte)
-	req := &request{
-		command:    command,
-		responseCh: ch,
-	}
-
-	s.requests <- req
-	return <-ch
-}
-
-func (s *Server) handle(commandAny any) []byte {
-	command, args, ok := parseCommand(commandAny)
+func (s *Server) Do(c any) []byte {
+	command, args, ok := parseCommand(c)
 	if !ok {
 		return resp.SimpleError("command should be an array of bulk strings.")
 	}
 
-	switch command {
+	ch := make(chan []byte)
+
+	s.inbox <- &request{
+		command:     command,
+		args:        args,
+		responseCh:  ch,
+		requestedAt: time.Now(),
+	}
+
+	return <-ch
+}
+
+func (s *Server) handle(req *request) {
+	var res response
+
+	switch req.command {
 	case "ping":
-		return s.handlePing(command, args)
+		res = s.handlePing(req.command, req.args)
 	case "echo":
-		return s.handleEcho(command, args)
+		res = s.handleEcho(req.command, req.args)
 	case "set":
-		return s.handleSet(command, args)
+		res = s.handleSet(req.command, req.args)
 	case "get":
-		return s.handleGet(command, args)
+		res = s.handleGet(req.command, req.args)
 	case "rpush":
-		return s.handleRpush(command, args)
+		res = s.handleRpush(req.command, req.args)
 	case "lpush":
-		return s.handleLpush(command, args)
+		res = s.handleLpush(req.command, req.args)
 	case "lrange":
-		return s.handleLrange(command, args)
+		res = s.handleLrange(req.command, req.args)
 	case "llen":
-		return s.handleLlen(command, args)
+		res = s.handleLlen(req.command, req.args)
 	case "lpop":
-		return s.handleLpop(command, args)
+		res = s.handleLpop(req.command, req.args)
+	case "blpop":
+		res = s.handleBlpop(req.command, req.args)
 	default:
-		return errUnknownCommand(command)
+		res = response{bytes: errUnknownCommand(req.command)}
+	}
+
+	if res.waitingOn != "" {
+		s.blockedBy[res.waitingOn] = append(s.blockedBy[res.waitingOn], req)
+	} else {
+		req.responseCh <- res.bytes
+		s.unblock(res.touchedKeys)
+	}
+}
+
+func (s *Server) unblock(touchedKeys []string) {
+	for _, key := range touchedKeys {
+		for _, req := range s.blockedBy[key] {
+			s.unblocked.Push(req)
+		}
+		delete(s.blockedBy, key)
 	}
 }
 
