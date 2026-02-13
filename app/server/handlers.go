@@ -189,11 +189,23 @@ func (s *Server) handleLlen(command string, args []string) []byte {
 }
 
 func (s *Server) handleLpop(command string, args []string) []byte {
-	if len(args) != 1 {
+	if len(args) == 0 || len(args) > 2 {
 		return errNumArgs(command)
 	}
 
 	key := args[0]
+	count := 1
+	if len(args) == 2 {
+		var err error
+		count, err = strconv.Atoi(args[1])
+		if err != nil {
+			return errMustBePositive
+		}
+	}
+
+	if count < 0 {
+		return errMustBePositive
+	}
 
 	e, ok := s.storage[key]
 	if !ok {
@@ -209,11 +221,15 @@ func (s *Server) handleLpop(command string, args []string) []byte {
 		return resp.NullBulkString
 	}
 
-	ret := list[0]
-	e.value = list[1:]
+	ret := list[:count]
+	e.value = list[count:]
 	s.storage[key] = e
 
-	return resp.BulkString(ret)
+	if len(args) == 1 {
+		return resp.BulkString(ret[0])
+	} else {
+		return resp.Array(ret)
+	}
 }
 
 func errNumArgs(command string) []byte {
@@ -229,5 +245,6 @@ func errUnknownCommand(command string) []byte {
 var (
 	errSyntaxError    = resp.SimpleError("ERR syntax error")
 	errInvalidInteger = resp.SimpleError("ERR value is not an integer or out of range")
+	errMustBePositive = resp.SimpleError("ERR value is out of range, must be positive")
 	errWrongType      = resp.SimpleError("WRONGTYPE Operation against a key holding the wrong kind of value")
 )
