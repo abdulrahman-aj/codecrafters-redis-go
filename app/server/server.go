@@ -1,7 +1,9 @@
 package server
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
@@ -47,22 +49,25 @@ func (s *Server) Do(command any) []byte {
 }
 
 func (s *Server) handle(commandAny any) []byte {
-	command, args, ok := castCommand(commandAny)
+	command, args, ok := parseCommand(commandAny)
 	if !ok {
-		panic("TODO: Handle errors properly")
+		return resp.SimpleError("command should be an array of bulk strings.")
 	}
 
 	switch command {
-	case "PING":
+	case "ping":
+		if len(args) != 0 {
+			return errNumArgs(command)
+		}
 		return resp.SimpleString("PONG")
-	case "ECHO":
+	case "echo":
 		if len(args) != 1 {
-			panic("TODO: Handle errors properly")
+			return errNumArgs(command)
 		}
 		return resp.BulkString(args[0])
-	case "SET":
+	case "set":
 		if len(args) != 2 && len(args) != 4 {
-			panic("TODO: Handle errors properly")
+			return errNumArgs(command)
 		}
 
 		var expiresAt time.Time
@@ -70,7 +75,7 @@ func (s *Server) handle(commandAny any) []byte {
 		if len(args) == 4 {
 			ttl, err := strconv.Atoi(args[3])
 			if err != nil {
-				panic("TODO: Handle errors properly")
+				return errInvalidInteger
 			}
 
 			switch args[2] {
@@ -79,15 +84,15 @@ func (s *Server) handle(commandAny any) []byte {
 			case "EX":
 				expiresAt = time.Now().Add(time.Duration(ttl) * time.Second)
 			default:
-				panic("TODO: Handle errors properly")
+				return errSyntaxError
 			}
 		}
 
 		s.storage[args[0]] = entry{value: args[1], expiresAt: expiresAt}
 		return resp.SimpleString("OK")
-	case "GET":
+	case "get":
 		if len(args) != 1 {
-			panic("TODO: Handle errors properly")
+			return errNumArgs(command)
 		}
 		entry, ok := s.storage[args[0]]
 		if !ok {
@@ -99,12 +104,11 @@ func (s *Server) handle(commandAny any) []byte {
 		}
 		return resp.BulkString(entry.value)
 	default:
-		panic("TODO: Handle errors properly")
+		return errUnknownCommand(command)
 	}
 }
 
-// Clients send commands to a Redis server as an array of bulk strings.
-func castCommand(v any) (string, []string, bool) {
+func parseCommand(v any) (string, []string, bool) {
 	args, ok := v.([]any)
 	if !ok {
 		return "", nil, false
@@ -123,5 +127,20 @@ func castCommand(v any) (string, []string, bool) {
 		return "", nil, false
 	}
 
-	return ret[0], ret[1:], true
+	return strings.ToLower(ret[0]), ret[1:], true
 }
+
+func errNumArgs(command string) []byte {
+	msg := fmt.Sprintf("ERR wrong number of arguments for '%s' command", command)
+	return resp.SimpleError(msg)
+}
+
+func errUnknownCommand(command string) []byte {
+	msg := fmt.Sprintf("ERR unknown command '%s'", command)
+	return resp.SimpleError(msg)
+}
+
+var (
+	errSyntaxError    = resp.SimpleError("ERR syntax error")
+	errInvalidInteger = resp.SimpleError("ERR value is not an integer or out of range")
+)

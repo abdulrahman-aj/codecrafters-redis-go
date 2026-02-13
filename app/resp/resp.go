@@ -106,6 +106,10 @@ func SimpleString(v string) []byte {
 	return fmt.Appendf(nil, "+%s\r\n", v)
 }
 
+func SimpleError(v string) []byte {
+	return fmt.Appendf(nil, "-%s\r\n", v)
+}
+
 func BulkString(v string) []byte {
 	return fmt.Appendf(nil, "$%d\r\n%s\r\n", len(v), v)
 }
