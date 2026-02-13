@@ -45,7 +45,8 @@ func (s *Server) handleSet(command string, args []string) []byte {
 		}
 	}
 
-	s.storage[args[0]] = entry{value: args[1], expiresAt: expiresAt}
+	key, value := args[0], args[1]
+	s.storage[key] = entry{value: value, expiresAt: expiresAt}
 	return resp.SimpleString("OK")
 }
 
@@ -53,15 +54,46 @@ func (s *Server) handleGet(command string, args []string) []byte {
 	if len(args) != 1 {
 		return errNumArgs(command)
 	}
-	entry, ok := s.storage[args[0]]
+	key := args[0]
+	e, ok := s.storage[key]
 	if !ok {
 		return resp.NullBulkString
 	}
-	if !entry.expiresAt.IsZero() && time.Now().After(entry.expiresAt) {
-		delete(s.storage, args[0])
+	if !e.expiresAt.IsZero() && time.Now().After(e.expiresAt) {
+		delete(s.storage, key)
 		return resp.NullBulkString
 	}
-	return resp.BulkString(entry.value)
+
+	valueStr, ok := e.value.(string)
+	if !ok {
+		return errWrongType
+	}
+
+	return resp.BulkString(valueStr)
+}
+
+func (s *Server) handleRpush(command string, args []string) []byte {
+	if len(args) < 2 {
+		return errNumArgs(command)
+	}
+
+	key := args[0]
+
+	e, ok := s.storage[key]
+	if !ok {
+		e = entry{value: []string{}}
+	}
+
+	eList, ok := e.value.([]string)
+	if !ok {
+		return errWrongType
+	}
+
+	eList = append(eList, args[1:]...)
+	e.value = eList
+	s.storage[key] = e
+
+	return resp.Integer(len(eList))
 }
 
 func errNumArgs(command string) []byte {
@@ -77,4 +109,5 @@ func errUnknownCommand(command string) []byte {
 var (
 	errSyntaxError    = resp.SimpleError("ERR syntax error")
 	errInvalidInteger = resp.SimpleError("ERR value is not an integer or out of range")
+	errWrongType      = resp.SimpleError("WRONGTYPE Operation against a key holding the wrong kind of value")
 )

@@ -13,7 +13,7 @@ type Server struct {
 }
 
 type entry struct {
-	value     string
+	value     any
 	expiresAt time.Time // TODO: implement background GC in the future
 }
 
@@ -61,6 +61,8 @@ func (s *Server) handle(commandAny any) []byte {
 		return s.handleSet(command, args)
 	case "get":
 		return s.handleGet(command, args)
+	case "rpush":
+		return s.handleRpush(command, args)
 	default:
 		return errUnknownCommand(command)
 	}
