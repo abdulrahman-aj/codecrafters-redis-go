@@ -168,6 +168,26 @@ func (s *Server) handleLrange(command string, args []string) []byte {
 	return resp.Array(list[start:min(end+1, n)])
 }
 
+func (s *Server) handleLlen(command string, args []string) []byte {
+	if len(args) != 1 {
+		return errNumArgs(command)
+	}
+
+	key := args[0]
+
+	e, ok := s.storage[key]
+	if !ok {
+		return resp.Integer(0)
+	}
+
+	list, ok := e.value.([]string)
+	if !ok {
+		return errWrongType
+	}
+
+	return resp.Integer(len(list))
+}
+
 func errNumArgs(command string) []byte {
 	msg := fmt.Sprintf("ERR wrong number of arguments for '%s' command", command)
 	return resp.SimpleError(msg)
