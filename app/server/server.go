@@ -63,6 +63,8 @@ func (s *Server) handle(commandAny any) []byte {
 		return s.handleGet(command, args)
 	case "rpush":
 		return s.handleRpush(command, args)
+	case "lrange":
+		return s.handleLrange(command, args)
 	default:
 		return errUnknownCommand(command)
 	}

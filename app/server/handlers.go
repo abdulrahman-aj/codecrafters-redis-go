@@ -84,16 +84,60 @@ func (s *Server) handleRpush(command string, args []string) []byte {
 		e = entry{value: []string{}}
 	}
 
-	eList, ok := e.value.([]string)
+	list, ok := e.value.([]string)
 	if !ok {
 		return errWrongType
 	}
 
-	eList = append(eList, args[1:]...)
-	e.value = eList
+	list = append(list, args[1:]...)
+	e.value = list
 	s.storage[key] = e
 
-	return resp.Integer(len(eList))
+	return resp.Integer(len(list))
+}
+
+func (s *Server) handleLrange(command string, args []string) []byte {
+	if len(args) != 3 {
+		return errNumArgs(command)
+	}
+
+	key := args[0]
+	start, err := strconv.Atoi(args[1])
+	if err != nil {
+		return errInvalidInteger
+	}
+	end, err := strconv.Atoi(args[2])
+	if err != nil {
+		return errInvalidInteger
+	}
+
+	e, ok := s.storage[key]
+	if !ok {
+		return resp.Array(nil)
+	}
+
+	list, ok := e.value.([]string)
+	if !ok {
+		return errWrongType
+	}
+
+	n := len(list)
+	normalizeIndex := func(x int) int {
+		if x < 0 {
+			x += n
+		}
+
+		return max(0, x)
+	}
+
+	start = normalizeIndex(start)
+	end = normalizeIndex(end)
+
+	if start > end || start >= n || n == 0 {
+		return resp.Array(nil)
+	}
+
+	return resp.Array(list[start:min(end+1, n)])
 }
 
 func errNumArgs(command string) []byte {

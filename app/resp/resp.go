@@ -118,4 +118,12 @@ func Integer(v int) []byte {
 	return fmt.Appendf(nil, ":%d\r\n", v)
 }
 
+func Array(arr []string) []byte {
+	ret := fmt.Appendf(nil, "*%d\r\n", len(arr))
+	for _, x := range arr {
+		ret = append(ret, BulkString(x)...)
+	}
+	return ret
+}
+
 var NullBulkString = []byte("$-1\r\n")
