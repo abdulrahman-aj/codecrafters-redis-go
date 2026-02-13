@@ -188,6 +188,34 @@ func (s *Server) handleLlen(command string, args []string) []byte {
 	return resp.Integer(len(list))
 }
 
+func (s *Server) handleLpop(command string, args []string) []byte {
+	if len(args) != 1 {
+		return errNumArgs(command)
+	}
+
+	key := args[0]
+
+	e, ok := s.storage[key]
+	if !ok {
+		return resp.Integer(0)
+	}
+
+	list, ok := e.value.([]string)
+	if !ok {
+		return errWrongType
+	}
+
+	if len(list) == 0 {
+		return resp.NullBulkString
+	}
+
+	ret := list[0]
+	e.value = list[1:]
+	s.storage[key] = e
+
+	return resp.BulkString(ret)
+}
+
 func errNumArgs(command string) []byte {
 	msg := fmt.Sprintf("ERR wrong number of arguments for '%s' command", command)
 	return resp.SimpleError(msg)
