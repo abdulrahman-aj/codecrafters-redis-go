@@ -62,7 +62,8 @@ func (s *Server) handleGet(req *request) []byte {
 	if !ok {
 		return resp.NullBulkString
 	}
-	if !e.expiresAt.IsZero() && time.Now().After(e.expiresAt) {
+
+	if e.isExpired() {
 		delete(s.storage, key)
 		return resp.NullBulkString
 	}
@@ -269,6 +270,32 @@ func (s *Server) handleBlpop(req *request) ([]byte, bool) {
 
 	req.touchedKeys = append(req.touchedKeys, key)
 	return resp.Array([]string{key, list[0]}), true
+}
+
+func (s *Server) handleType(req *request) []byte {
+	if len(req.args) != 1 {
+		return errNumArgs(req.command)
+	}
+
+	key := req.args[0]
+	e, ok := s.storage[key]
+	if !ok {
+		return resp.SimpleString("none")
+	}
+
+	if e.isExpired() {
+		delete(s.storage, key)
+		return resp.NullBulkString
+	}
+
+	switch e.value.(type) {
+	case string:
+		return resp.SimpleString("string")
+	case []string:
+		return resp.SimpleString("list")
+	default:
+		panic("unknown type?")
+	}
 }
 
 func errNumArgs(command string) []byte {

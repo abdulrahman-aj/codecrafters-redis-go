@@ -28,6 +28,10 @@ type entry struct {
 	expiresAt time.Time // TODO: implement background GC in the future, e.g: by sending a "gc" request to the event loop
 }
 
+func (e *entry) isExpired() bool {
+	return !e.expiresAt.IsZero() && time.Now().After(e.expiresAt)
+}
+
 type envelope struct {
 	req        *request
 	responseCh chan<- []byte
@@ -133,6 +137,8 @@ func (s *Server) handle(msg *envelope) {
 		res = s.handleLpop(msg.req)
 	case "blpop":
 		res, done = s.handleBlpop(msg.req)
+	case "type":
+		res = s.handleType(msg.req)
 	default:
 		res = errUnknownCommand(msg.req.command)
 	}
