@@ -126,4 +126,7 @@ func Array(arr []string) []byte {
 	return ret
 }
 
-var NullBulkString = []byte("$-1\r\n")
+var (
+	NullBulkString = []byte("$-1\r\n")
+	NullArray      = []byte("*-1\r\n")
+)

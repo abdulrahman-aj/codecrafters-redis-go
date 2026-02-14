@@ -48,6 +48,7 @@ func handleConnection(srv *server.Server, conn net.Conn) {
 			return
 		}
 
+		// TODO: should tell srv.Do if client canceled or closed the connection, e.g: context.Context
 		if _, err := conn.Write(srv.Do(command)); err != nil {
 			fmt.Println("Error writing to connection: ", err.Error())
 			break

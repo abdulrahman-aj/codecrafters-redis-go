@@ -9,80 +9,78 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 )
 
-func (s *Server) handlePing(command string, args []string) response {
-	if len(args) != 0 {
-		return response{bytes: errNumArgs(command)}
+func (s *Server) handlePing(req *request) []byte {
+	if len(req.args) != 0 {
+		return errNumArgs(req.command)
 	}
-	return response{bytes: resp.SimpleString("PONG")}
+	return resp.SimpleString("PONG")
 }
 
-func (s *Server) handleEcho(command string, args []string) response {
-	if len(args) != 1 {
-		return response{bytes: errNumArgs(command)}
+func (s *Server) handleEcho(req *request) []byte {
+	if len(req.args) != 1 {
+		return errNumArgs(req.command)
 	}
-	return response{bytes: resp.BulkString(args[0])}
+	return resp.BulkString(req.args[0])
 }
 
-func (s *Server) handleSet(command string, args []string) response {
-	if len(args) != 2 && len(args) != 4 {
-		return response{bytes: errNumArgs(command)}
+func (s *Server) handleSet(req *request) []byte {
+	if len(req.args) != 2 && len(req.args) != 4 {
+		return errNumArgs(req.command)
 	}
 
 	var expiresAt time.Time
 
-	if len(args) == 4 {
-		ttl, err := strconv.Atoi(args[3])
+	if len(req.args) == 4 {
+		ttl, err := strconv.Atoi(req.args[3])
 		if err != nil {
-			return response{bytes: errInvalidInteger}
+			return errInvalidInteger
 		}
 
-		switch args[2] {
+		switch req.args[2] {
 		case "PX":
 			expiresAt = time.Now().Add(time.Duration(ttl) * time.Millisecond)
 		case "EX":
 			expiresAt = time.Now().Add(time.Duration(ttl) * time.Second)
 		default:
-			return response{bytes: errSyntaxError}
+			return errSyntaxError
 		}
 	}
 
-	key, value := args[0], args[1]
+	key, value := req.args[0], req.args[1]
 	s.storage[key] = entry{value: value, expiresAt: expiresAt}
 
-	return response{
-		bytes:       resp.SimpleString("OK"),
-		touchedKeys: []string{key},
-	}
+	req.touchedKeys = append(req.touchedKeys, key)
+	return resp.SimpleString("OK")
 }
 
-func (s *Server) handleGet(command string, args []string) response {
-	if len(args) != 1 {
-		return response{bytes: errNumArgs(command)}
+func (s *Server) handleGet(req *request) []byte {
+	if len(req.args) != 1 {
+		return errNumArgs(req.command)
 	}
-	key := args[0]
+	key := req.args[0]
 	e, ok := s.storage[key]
 	if !ok {
-		return response{bytes: resp.NullBulkString}
+		return resp.NullBulkString
 	}
 	if !e.expiresAt.IsZero() && time.Now().After(e.expiresAt) {
 		delete(s.storage, key)
-		return response{bytes: resp.NullBulkString}
+		return resp.NullBulkString
 	}
 
 	valueStr, ok := e.value.(string)
 	if !ok {
-		return response{bytes: errWrongType}
+		return errWrongType
 	}
 
-	return response{bytes: resp.BulkString(valueStr)}
+	return resp.BulkString(valueStr)
 }
 
-func (s *Server) handleRpush(command string, args []string) response {
-	if len(args) < 2 {
-		return response{bytes: errNumArgs(command)}
+func (s *Server) handleRpush(req *request) []byte {
+	if len(req.args) < 2 {
+		return errNumArgs(req.command)
 	}
 
-	key := args[0]
+	key := req.args[0]
 
 	e, ok := s.storage[key]
 	if !ok {
@@ -91,25 +89,23 @@ func (s *Server) handleRpush(command string, args []string) response {
 
 	list, ok := e.value.([]string)
 	if !ok {
-		return response{bytes: errWrongType}
+		return errWrongType
 	}
 
-	list = append(list, args[1:]...)
+	list = append(list, req.args[1:]...)
 	e.value = list
 	s.storage[key] = e
 
-	return response{
-		bytes:       resp.Integer(len(list)),
-		touchedKeys: []string{key},
-	}
+	req.touchedKeys = append(req.touchedKeys, key)
+	return resp.Integer(len(list))
 }
 
-func (s *Server) handleLpush(command string, args []string) response {
-	if len(args) < 2 {
-		return response{bytes: errNumArgs(command)}
+func (s *Server) handleLpush(req *request) []byte {
+	if len(req.args) < 2 {
+		return errNumArgs(req.command)
 	}
 
-	key := args[0]
+	key := req.args[0]
 
 	e, ok := s.storage[key]
 	if !ok {
@@ -118,45 +114,43 @@ func (s *Server) handleLpush(command string, args []string) response {
 
 	list, ok := e.value.([]string)
 	if !ok {
-		return response{bytes: errWrongType}
+		return errWrongType
 	}
 
-	elems := args[1:]
+	elems := req.args[1:]
 	slices.Reverse(elems)
 
 	list = append(elems, list...) // TODO: consider using a linked-list to optimize this
 	e.value = list
 	s.storage[key] = e
 
-	return response{
-		bytes:       resp.Integer(len(list)),
-		touchedKeys: []string{key},
-	}
+	req.touchedKeys = append(req.touchedKeys, key)
+	return resp.Integer(len(list))
 }
 
-func (s *Server) handleLrange(command string, args []string) response {
-	if len(args) != 3 {
-		return response{bytes: errNumArgs(command)}
+func (s *Server) handleLrange(req *request) []byte {
+	if len(req.args) != 3 {
+		return errNumArgs(req.command)
 	}
 
-	key := args[0]
-	start, err := strconv.Atoi(args[1])
+	key := req.args[0]
+	start, err := strconv.Atoi(req.args[1])
 	if err != nil {
-		return response{bytes: errInvalidInteger}
+		return errInvalidInteger
 	}
-	end, err := strconv.Atoi(args[2])
+	end, err := strconv.Atoi(req.args[2])
 	if err != nil {
-		return response{bytes: errInvalidInteger}
+		return errInvalidInteger
 	}
 
 	e, ok := s.storage[key]
 	if !ok {
-		return response{bytes: resp.Array(nil)}
+		return resp.Array(nil)
 	}
 
 	list, ok := e.value.([]string)
 	if !ok {
-		return response{bytes: errWrongType}
+		return errWrongType
 	}
 
 	n := len(list)
@@ -172,59 +166,59 @@ func (s *Server) handleLrange(command string, args []string) response {
 	end = normalizeIndex(end)
 
 	if start > end || start >= n || n == 0 {
-		return response{bytes: resp.Array(nil)}
+		return resp.Array(nil)
 	}
 
-	return response{bytes: resp.Array(list[start:min(end+1, n)])}
+	return resp.Array(list[start:min(end+1, n)])
 }
 
-func (s *Server) handleLlen(command string, args []string) response {
-	if len(args) != 1 {
-		return response{bytes: errNumArgs(command)}
+func (s *Server) handleLlen(req *request) []byte {
+	if len(req.args) != 1 {
+		return errNumArgs(req.command)
 	}
 
-	key := args[0]
+	key := req.args[0]
 
 	e, ok := s.storage[key]
 	if !ok {
-		return response{bytes: resp.Integer(0)}
+		return resp.Integer(0)
 	}
 
 	list, ok := e.value.([]string)
 	if !ok {
-		return response{bytes: errWrongType}
+		return errWrongType
 	}
 
-	return response{bytes: resp.Integer(len(list))}
+	return resp.Integer(len(list))
 }
 
-func (s *Server) handleLpop(command string, args []string) response {
-	if len(args) == 0 || len(args) > 2 {
-		return response{bytes: errNumArgs(command)}
+func (s *Server) handleLpop(req *request) []byte {
+	if len(req.args) == 0 || len(req.args) > 2 {
+		return errNumArgs(req.command)
 	}
 
-	key := args[0]
+	key := req.args[0]
 	count := 1
-	if len(args) == 2 {
+	if len(req.args) == 2 {
 		var err error
-		count, err = strconv.Atoi(args[1])
+		count, err = strconv.Atoi(req.args[1])
 		if err != nil {
-			return response{bytes: errMustBePositive}
+			return errMustBePositive
 		}
 	}
 
 	if count < 0 {
-		return response{bytes: errMustBePositive}
+		return errMustBePositive
 	}
 
 	e, ok := s.storage[key]
 	if !ok {
-		return response{bytes: resp.NullBulkString}
+		return resp.NullBulkString
 	}
 
 	list, ok := e.value.([]string)
 	if !ok {
-		return response{bytes: errWrongType}
+		return errWrongType
 	}
 
 	ret := list[:count]
@@ -235,45 +229,46 @@ func (s *Server) handleLpop(command string, args []string) response {
 		s.storage[key] = e
 	}
 
-	res := response{touchedKeys: []string{key}}
-	if len(args) == 1 {
-		res.bytes = resp.BulkString(ret[0])
-	} else {
-		res.bytes = resp.Array(ret)
+	req.touchedKeys = append(req.touchedKeys, key)
+
+	if len(req.args) == 1 {
+		return resp.BulkString(ret[0])
 	}
-	return res
+	return resp.Array(ret)
 }
 
-func (s *Server) handleBlpop(command string, args []string) response {
-	if len(args) != 2 {
-		return response{bytes: errNumArgs(command)}
+func (s *Server) handleBlpop(req *request) ([]byte, bool) {
+	if len(req.args) != 2 {
+		return errNumArgs(req.command), true
 	}
 
-	key := args[0]
-	timeout := args[1]
-
-	if timeout != "0" {
-		panic("ha?") // TODO: temp for this stage
+	key := req.args[0]
+	timeout, err := strconv.ParseFloat(req.args[1], 64)
+	if err != nil {
+		return errInvalidTimeout, true
 	}
 
-	e, ok := s.storage[key]
-	if !ok {
-		return response{waitingOn: key}
+	if timeout != 0 {
+		duration := time.Duration(timeout * float64(time.Second))
+		req.deadline = req.requestedAt.Add(duration)
 	}
 
-	list, ok := e.value.([]string)
-	if !ok || len(list) == 0 {
-		return response{waitingOn: key}
+	if !req.deadline.IsZero() && time.Now().After(req.deadline) {
+		return resp.NullArray, true
 	}
 
-	ret := list[0]
+	if list, ok := s.storage[key].value.([]string); !ok || len(list) == 0 {
+		req.dependency = key
+		return nil, false
+	}
+
+	e := s.storage[key]
+	list := e.value.([]string)
 	e.value = list[1:]
 	s.storage[key] = e
 
-	return response{
-		bytes:       resp.Array([]string{key, ret}),
-		touchedKeys: []string{key},
-	}
+	req.touchedKeys = append(req.touchedKeys, key)
+	return resp.Array([]string{key, list[0]}), true
 }
 
 func errNumArgs(command string) []byte {
@@ -289,6 +284,7 @@ func errUnknownCommand(command string) []byte {
 var (
 	errSyntaxError    = resp.SimpleError("ERR syntax error")
 	errInvalidInteger = resp.SimpleError("ERR value is not an integer or out of range")
+	errInvalidTimeout = resp.SimpleError("ERR timeout is not a float or out of range")
 	errMustBePositive = resp.SimpleError("ERR value is out of range, must be positive")
 	errWrongType      = resp.SimpleError("WRONGTYPE Operation against a key holding the wrong kind of value")
 )

@@ -2,6 +2,7 @@ package server
 
 import (
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/containers"
@@ -9,48 +10,77 @@ import (
 )
 
 type Server struct {
-	inbox     chan *request
-	storage   map[string]entry                    // TODO: need to empty this map periodically as it will cause a memory leak
-	blockedBy map[string][]*request               // TODO: memory leak here. need to shrink to fit
-	unblocked *containers.PriorityQueue[*request] // TODO: memory leak here. need to shrink to fit
+	inbox   chan *envelope
+	storage map[string]entry // TODO: need to empty this map periodically as it will cause a memory leak. TODO: move this to a separate struct
+
+	// Contains requests that are blocked on some key
+	waitQueue *waitQueue
+
+	// Contains requests that are potentially unblocked
+	readyQueue *containers.IndexedPriorityQueue[*envelope, int64] // TODO: memory leak here. need to shrink to fit
+
+	// auto-increment ID for requests
+	lastID atomic.Int64
 }
 
 type entry struct {
 	value     any
-	expiresAt time.Time // TODO: implement background GC in the future
+	expiresAt time.Time // TODO: implement background GC in the future, e.g: by sending a "gc" request to the event loop
+}
+
+type envelope struct {
+	req        *request
+	responseCh chan<- []byte
+}
+
+func (e *envelope) key() int64 { return e.req.id }
+
+func (e *envelope) before(other *envelope) bool {
+	return e.req.requestedAt.Before(other.req.requestedAt)
 }
 
 type request struct {
+	id          int64
 	command     string
 	args        []string
-	responseCh  chan<- []byte
 	requestedAt time.Time
-}
-
-type response struct {
-	bytes       []byte
-	waitingOn   string
+	deadline    time.Time
+	dependency  string
 	touchedKeys []string
 }
 
 func New() *Server {
 	return &Server{
-		inbox:     make(chan *request),
+		inbox:     make(chan *envelope),
 		storage:   map[string]entry{},
-		blockedBy: map[string][]*request{},
-		unblocked: containers.NewPriorityQueue(func(a, b *request) bool {
-			return a.requestedAt.Before(b.requestedAt)
-		}),
+		waitQueue: newWaitQueue(),
+		readyQueue: containers.NewIndexedPriorityQueue(
+			(*envelope).key,
+			(*envelope).before,
+		),
 	}
 }
 
 func (s *Server) Run() {
-	for req := range s.inbox {
-		s.handle(req)
+	nextTimeout := time.NewTimer(0)
 
-		for s.unblocked.Len() != 0 {
-			req, _ := s.unblocked.Pop()
+	for {
+		select {
+		case msg := <-s.inbox:
+			s.handle(msg)
+		case <-nextTimeout.C:
+			for _, msg := range s.waitQueue.dequeueExpired() {
+				s.readyQueue.Enqueue(msg)
+			}
+		}
+
+		for s.readyQueue.Len() > 0 {
+			req, _ := s.readyQueue.Dequeue()
 			s.handle(req)
+		}
+
+		if t, ok := s.waitQueue.timeUntilNext(); ok {
+			nextTimeout.Reset(t)
 		}
 	}
 }
@@ -63,58 +93,63 @@ func (s *Server) Do(c any) []byte {
 
 	ch := make(chan []byte)
 
-	s.inbox <- &request{
-		command:     command,
-		args:        args,
-		responseCh:  ch,
-		requestedAt: time.Now(),
+	s.inbox <- &envelope{
+		responseCh: ch,
+		req: &request{
+			id:          s.lastID.Add(1),
+			command:     command,
+			args:        args,
+			requestedAt: time.Now(),
+		},
 	}
 
 	return <-ch
 }
 
-func (s *Server) handle(req *request) {
-	var res response
+func (s *Server) handle(msg *envelope) {
+	var (
+		res  []byte
+		done = true
+	)
 
-	switch req.command {
+	switch msg.req.command {
 	case "ping":
-		res = s.handlePing(req.command, req.args)
+		res = s.handlePing(msg.req)
 	case "echo":
-		res = s.handleEcho(req.command, req.args)
+		res = s.handleEcho(msg.req)
 	case "set":
-		res = s.handleSet(req.command, req.args)
+		res = s.handleSet(msg.req)
 	case "get":
-		res = s.handleGet(req.command, req.args)
+		res = s.handleGet(msg.req)
 	case "rpush":
-		res = s.handleRpush(req.command, req.args)
+		res = s.handleRpush(msg.req)
 	case "lpush":
-		res = s.handleLpush(req.command, req.args)
+		res = s.handleLpush(msg.req)
 	case "lrange":
-		res = s.handleLrange(req.command, req.args)
+		res = s.handleLrange(msg.req)
 	case "llen":
-		res = s.handleLlen(req.command, req.args)
+		res = s.handleLlen(msg.req)
 	case "lpop":
-		res = s.handleLpop(req.command, req.args)
+		res = s.handleLpop(msg.req)
 	case "blpop":
-		res = s.handleBlpop(req.command, req.args)
+		res, done = s.handleBlpop(msg.req)
 	default:
-		res = response{bytes: errUnknownCommand(req.command)}
+		res = errUnknownCommand(msg.req.command)
 	}
 
-	if res.waitingOn != "" {
-		s.blockedBy[res.waitingOn] = append(s.blockedBy[res.waitingOn], req)
+	if !done {
+		s.waitQueue.enqueue(msg)
 	} else {
-		req.responseCh <- res.bytes
-		s.unblock(res.touchedKeys)
+		msg.responseCh <- res
+		s.wakeWaiters(msg.req.touchedKeys)
 	}
 }
 
-func (s *Server) unblock(touchedKeys []string) {
+func (s *Server) wakeWaiters(touchedKeys []string) {
 	for _, key := range touchedKeys {
-		for _, req := range s.blockedBy[key] {
-			s.unblocked.Push(req)
+		for _, msg := range s.waitQueue.dequeueWaiters(key) {
+			s.readyQueue.Enqueue(msg)
 		}
-		delete(s.blockedBy, key)
 	}
 }
 
