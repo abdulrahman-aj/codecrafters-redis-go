@@ -222,8 +222,10 @@ func (s *Server) handleLpop(req *request) []byte {
 		return errWrongType
 	}
 
+	count = min(count, len(list))
+
 	ret := list[:count]
-	if len(list[count:]) == 0 {
+	if count == len(list) {
 		delete(s.storage, key)
 	} else {
 		e.value = list[count:]
