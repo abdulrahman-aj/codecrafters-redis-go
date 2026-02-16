@@ -10,8 +10,8 @@ import (
 )
 
 type Server struct {
-	inbox   chan *envelope
-	storage map[string]entry // TODO: need to empty this map periodically as it will cause a memory leak. TODO: move this to a separate struct
+	inbox chan *envelope
+	store *store
 
 	// Contains requests that are blocked on some key
 	waitQueue *waitQueue
@@ -21,15 +21,6 @@ type Server struct {
 
 	// auto-increment ID for requests
 	lastID atomic.Int64
-}
-
-type entry struct {
-	value     any
-	expiresAt time.Time // TODO: implement background GC in the future, e.g: by sending a "gc" request to the event loop
-}
-
-func (e *entry) isExpired() bool {
-	return !e.expiresAt.IsZero() && time.Now().After(e.expiresAt)
 }
 
 type envelope struct {
@@ -53,10 +44,14 @@ type request struct {
 	touchedKeys []string
 }
 
+func (r *request) isExpired() bool {
+	return !r.deadline.IsZero() && time.Now().After(r.deadline)
+}
+
 func New() *Server {
 	return &Server{
 		inbox:     make(chan *envelope),
-		storage:   map[string]entry{},
+		store:     newStore(),
 		waitQueue: newWaitQueue(),
 		readyQueue: containers.NewIndexedPriorityQueue(
 			(*envelope).key,

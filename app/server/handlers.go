@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
@@ -36,10 +37,10 @@ func (s *Server) handleSet(req *request) []byte {
 			return errInvalidInteger
 		}
 
-		switch req.args[2] {
-		case "PX":
+		switch strings.ToLower(req.args[2]) {
+		case "px":
 			expiresAt = time.Now().Add(time.Duration(ttl) * time.Millisecond)
-		case "EX":
+		case "ex":
 			expiresAt = time.Now().Add(time.Duration(ttl) * time.Second)
 		default:
 			return errSyntaxError
@@ -47,9 +48,9 @@ func (s *Server) handleSet(req *request) []byte {
 	}
 
 	key, value := req.args[0], req.args[1]
-	s.storage[key] = entry{value: value, expiresAt: expiresAt}
-
+	s.store.set(key, entry{value: value, expiresAt: expiresAt})
 	req.touchedKeys = append(req.touchedKeys, key)
+
 	return resp.SimpleString("OK")
 }
 
@@ -57,14 +58,10 @@ func (s *Server) handleGet(req *request) []byte {
 	if len(req.args) != 1 {
 		return errNumArgs(req.command)
 	}
-	key := req.args[0]
-	e, ok := s.storage[key]
-	if !ok {
-		return resp.NullBulkString
-	}
 
-	if e.isExpired() {
-		delete(s.storage, key)
+	key := req.args[0]
+	e, ok := s.store.get(key)
+	if !ok {
 		return resp.NullBulkString
 	}
 
@@ -83,7 +80,7 @@ func (s *Server) handleRpush(req *request) []byte {
 
 	key := req.args[0]
 
-	e, ok := s.storage[key]
+	e, ok := s.store.get(key)
 	if !ok {
 		e = entry{value: []string{}}
 	}
@@ -95,8 +92,8 @@ func (s *Server) handleRpush(req *request) []byte {
 
 	list = append(list, req.args[1:]...)
 	e.value = list
-	s.storage[key] = e
 
+	s.store.set(key, e)
 	req.touchedKeys = append(req.touchedKeys, key)
 	return resp.Integer(len(list))
 }
@@ -108,7 +105,7 @@ func (s *Server) handleLpush(req *request) []byte {
 
 	key := req.args[0]
 
-	e, ok := s.storage[key]
+	e, ok := s.store.get(key)
 	if !ok {
 		e = entry{value: []string{}}
 	}
@@ -123,8 +120,8 @@ func (s *Server) handleLpush(req *request) []byte {
 
 	list = append(elems, list...) // TODO: consider using a linked-list to optimize this
 	e.value = list
-	s.storage[key] = e
 
+	s.store.set(key, e)
 	req.touchedKeys = append(req.touchedKeys, key)
 	return resp.Integer(len(list))
 }
@@ -144,7 +141,7 @@ func (s *Server) handleLrange(req *request) []byte {
 		return errInvalidInteger
 	}
 
-	e, ok := s.storage[key]
+	e, ok := s.store.get(key)
 	if !ok {
 		return resp.Array(nil)
 	}
@@ -180,7 +177,7 @@ func (s *Server) handleLlen(req *request) []byte {
 
 	key := req.args[0]
 
-	e, ok := s.storage[key]
+	e, ok := s.store.get(key)
 	if !ok {
 		return resp.Integer(0)
 	}
@@ -200,6 +197,7 @@ func (s *Server) handleLpop(req *request) []byte {
 
 	key := req.args[0]
 	count := 1
+
 	if len(req.args) == 2 {
 		var err error
 		count, err = strconv.Atoi(req.args[1])
@@ -212,7 +210,7 @@ func (s *Server) handleLpop(req *request) []byte {
 		return errMustBePositive
 	}
 
-	e, ok := s.storage[key]
+	e, ok := s.store.get(key)
 	if !ok {
 		return resp.NullBulkString
 	}
@@ -223,20 +221,16 @@ func (s *Server) handleLpop(req *request) []byte {
 	}
 
 	count = min(count, len(list))
-
 	ret := list[:count]
-	if count == len(list) {
-		delete(s.storage, key)
-	} else {
-		e.value = list[count:]
-		s.storage[key] = e
-	}
+	e.value = list[count:]
 
+	s.store.set(key, e)
 	req.touchedKeys = append(req.touchedKeys, key)
 
 	if len(req.args) == 1 {
 		return resp.BulkString(ret[0])
 	}
+
 	return resp.Array(ret)
 }
 
@@ -251,24 +245,29 @@ func (s *Server) handleBlpop(req *request) ([]byte, bool) {
 		return errInvalidTimeout, true
 	}
 
+	req.dependency = key
+
 	if timeout != 0 {
 		duration := time.Duration(timeout * float64(time.Second))
 		req.deadline = req.requestedAt.Add(duration)
 	}
 
-	if !req.deadline.IsZero() && time.Now().After(req.deadline) {
+	if req.isExpired() {
 		return resp.NullArray, true
 	}
 
-	if list, ok := s.storage[key].value.([]string); !ok || len(list) == 0 {
-		req.dependency = key
+	e, ok := s.store.get(key)
+	if !ok {
 		return nil, false
 	}
 
-	e := s.storage[key]
-	list := e.value.([]string)
+	list, ok := e.value.([]string)
+	if !ok {
+		return nil, false
+	}
+
 	e.value = list[1:]
-	s.storage[key] = e
+	s.store.set(key, e)
 
 	req.touchedKeys = append(req.touchedKeys, key)
 	return resp.Array([]string{key, list[0]}), true
@@ -280,14 +279,9 @@ func (s *Server) handleType(req *request) []byte {
 	}
 
 	key := req.args[0]
-	e, ok := s.storage[key]
+	e, ok := s.store.get(key)
 	if !ok {
 		return resp.SimpleString("none")
-	}
-
-	if e.isExpired() {
-		delete(s.storage, key)
-		return resp.NullBulkString
 	}
 
 	switch e.value.(type) {
