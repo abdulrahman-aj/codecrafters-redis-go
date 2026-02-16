@@ -393,7 +393,6 @@ func (s *Server) handleXread(req *request) ([]byte, bool) {
 		}
 
 		if !strings.EqualFold(req.args[2], "streams") {
-			fmt.Println("hello??", req.args[2])
 			return errSyntaxError, true
 		}
 
