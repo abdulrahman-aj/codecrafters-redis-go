@@ -330,7 +330,7 @@ func (s *Server) handleXadd(req *request) []byte {
 		})
 	}
 
-	id, err := stream.Append(entryID, fields)
+	id, err := stream.Append(entryID, fields, req.requestedAt)
 	if err != nil {
 		return err
 	}
@@ -381,6 +381,7 @@ func (s *Server) handleXread(req *request) ([]byte, bool) {
 		return errNumArgs(req.command), true
 	}
 
+	// TODO: parsing the same blocking requests multiple times is a bit wasteful
 	var (
 		isBlocking = strings.EqualFold(req.args[0], "block")
 		keysAndIDs []string
@@ -442,7 +443,17 @@ func (s *Server) handleXread(req *request) ([]byte, bool) {
 			return errWrongType, true
 		}
 
-		entries, err := stream.After(ids[i])
+		var (
+			entries []streams.Entry
+			err     []byte
+		)
+
+		if ids[i] == "$" {
+			entries = stream.AfterTime(req.requestedAt)
+		} else {
+			entries, err = stream.After(ids[i])
+		}
+
 		if err != nil {
 			return err, true
 		}

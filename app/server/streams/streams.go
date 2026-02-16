@@ -16,9 +16,10 @@ type Stream struct {
 }
 
 type Entry struct {
-	Ms     int // Milliseconds
-	Seq    int // Sequence Number
-	Fields []Field
+	Ms        int // Milliseconds
+	Seq       int // Sequence Number
+	Fields    []Field
+	CreatedAt time.Time
 }
 
 func (e *Entry) Format() []any {
@@ -41,13 +42,13 @@ type Field struct {
 	Value string
 }
 
-func (s *Stream) Append(entryID string, fields []Field) (string, []byte) {
+func (s *Stream) Append(entryID string, fields []Field, createdAt time.Time) (string, []byte) {
 	ms, seq, err := s.generateID(entryID)
 	if err != nil {
 		return "", err
 	}
 
-	e := Entry{Ms: ms, Seq: seq, Fields: fields}
+	e := Entry{Ms: ms, Seq: seq, Fields: fields, CreatedAt: createdAt}
 	s.entries = append(s.entries, e)
 
 	return e.ID(), nil
@@ -92,6 +93,14 @@ func (s *Stream) Between(start, end string) ([]Entry, []byte) {
 	}
 
 	return s.entries[lb:ub], nil
+}
+
+func (s *Stream) AfterTime(t time.Time) []Entry {
+	i := sort.Search(len(s.entries), func(i int) bool {
+		return s.entries[i].CreatedAt.After(t)
+	})
+
+	return s.entries[i:]
 }
 
 func (s *Stream) After(start string) ([]Entry, []byte) {
