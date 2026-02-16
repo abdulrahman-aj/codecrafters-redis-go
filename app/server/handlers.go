@@ -320,8 +320,32 @@ func (s *Server) handleXadd(req *request) []byte {
 		return errWrongType
 	}
 
-	if n := len(stream); n > 0 && stream[n-1]["id"] >= entryID {
-		return errXaddInvalidID
+	parseEntryID := func(entryID string) (int, int, error) {
+		var milliSeconds, sequenceNumber int
+		_, err := fmt.Sscanf(entryID, "%d-%d", &milliSeconds, &sequenceNumber)
+		return milliSeconds, sequenceNumber, err
+	}
+
+	milliSeconds, sequenceNumber, err := parseEntryID(entryID)
+	if err != nil {
+		return resp.SimpleError("ERR Invalid stream ID specified as stream command argument")
+	}
+
+	if milliSeconds <= 0 && sequenceNumber <= 0 {
+		return resp.SimpleError("ERR The ID specified in XADD must be greater than 0-0")
+	}
+
+	if len(stream) != 0 {
+		lastEntry := stream[len(stream)-1]
+		lastMilliSeconds, lastSequenceNumber, err := parseEntryID(lastEntry["id"])
+		if err != nil {
+			panic(err)
+		}
+
+		if milliSeconds < lastMilliSeconds ||
+			milliSeconds == lastMilliSeconds && sequenceNumber <= lastSequenceNumber {
+			return resp.SimpleError("ERR The ID specified in XADD is equal or smaller than the target stream top item")
+		}
 	}
 
 	streamEntry := map[string]string{"id": entryID}
@@ -355,5 +379,4 @@ var (
 	errInvalidTimeout = resp.SimpleError("ERR timeout is not a float or out of range")
 	errMustBePositive = resp.SimpleError("ERR value is out of range, must be positive")
 	errWrongType      = resp.SimpleError("WRONGTYPE Operation against a key holding the wrong kind of value")
-	errXaddInvalidID  = resp.SimpleError("ERR The ID specified in XADD is equal or smaller than the target stream top item")
 )
