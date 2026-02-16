@@ -176,7 +176,6 @@ func (s *Server) handleLlen(req *request) []byte {
 	}
 
 	key := req.args[0]
-
 	e, ok := s.store.get(key)
 	if !ok {
 		return resp.Integer(0)
@@ -289,9 +288,55 @@ func (s *Server) handleType(req *request) []byte {
 		return resp.SimpleString("string")
 	case []string:
 		return resp.SimpleString("list")
+	case []map[string]string:
+		return resp.SimpleString("stream")
 	default:
 		panic("unknown type?")
 	}
+}
+
+func (s *Server) handleXadd(req *request) []byte {
+	if len(req.args) < 4 {
+		return errNumArgs(req.command)
+	}
+
+	var (
+		key     = req.args[0]
+		entryID = req.args[1]
+		kvs     = req.args[2:]
+	)
+
+	if len(kvs)%2 != 0 {
+		return errNumArgs(req.command)
+	}
+
+	e, ok := s.store.get(key)
+	if !ok {
+		e = entry{value: []map[string]string{}}
+	}
+
+	stream, ok := e.value.([]map[string]string)
+	if !ok {
+		return errWrongType
+	}
+
+	if n := len(stream); n > 0 && stream[n-1]["id"] >= entryID {
+		return errXaddInvalidID
+	}
+
+	streamEntry := map[string]string{"id": entryID}
+	for i := 0; i < len(kvs); i += 2 {
+		k, v := kvs[i], kvs[i+1]
+		streamEntry[k] = v
+	}
+
+	stream = append(stream, streamEntry)
+
+	e.value = stream
+	s.store.set(key, e)
+	req.touchedKeys = append(req.touchedKeys, key)
+
+	return resp.BulkString(entryID)
 }
 
 func errNumArgs(command string) []byte {
@@ -310,4 +355,5 @@ var (
 	errInvalidTimeout = resp.SimpleError("ERR timeout is not a float or out of range")
 	errMustBePositive = resp.SimpleError("ERR value is out of range, must be positive")
 	errWrongType      = resp.SimpleError("WRONGTYPE Operation against a key holding the wrong kind of value")
+	errXaddInvalidID  = resp.SimpleError("ERR The ID specified in XADD is equal or smaller than the target stream top item")
 )

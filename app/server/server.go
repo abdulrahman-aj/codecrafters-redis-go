@@ -134,6 +134,8 @@ func (s *Server) handle(msg *envelope) {
 		res, done = s.handleBlpop(msg.req)
 	case "type":
 		res = s.handleType(msg.req)
+	case "xadd":
+		res = s.handleXadd(msg.req)
 	default:
 		res = errUnknownCommand(msg.req.command)
 	}
