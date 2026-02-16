@@ -2,7 +2,9 @@ package streams
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 )
@@ -31,27 +33,25 @@ type Field struct {
 func (s Stream) GenerateID(entryID string) (int, int, []byte) {
 	switch {
 	case entryID == "*":
-		ms, seq := s.generateFullID()
-		return ms, seq, nil
+		return s.generateFullID()
 	case strings.HasSuffix(entryID, "-*"):
-		return s.generatePartialID(entryID)
+		msStr, _ := strings.CutSuffix(entryID, "-*")
+		ms, err := strconv.Atoi(msStr)
+		if err != nil || ms < 0 {
+			return 0, 0, errInvalidStreamID
+		}
+
+		return s.generatePartialID(ms)
 	default:
 		return s.validateID(entryID)
 	}
 }
 
-func (s Stream) generateFullID() (int, int) {
-	panic("not implemented")
+func (s Stream) generateFullID() (int, int, []byte) {
+	return s.generatePartialID(int(time.Now().UnixMilli()))
 }
 
-func (s Stream) generatePartialID(entryID string) (int, int, []byte) {
-	var ms int
-
-	_, err := fmt.Sscanf(entryID, "%d-*", &ms)
-	if err != nil || ms < 0 {
-		return 0, 0, errInvalidStreamID
-	}
-
+func (s Stream) generatePartialID(ms int) (int, int, []byte) {
 	if len(s) == 0 {
 		if ms == 0 {
 			return 0, 1, nil
