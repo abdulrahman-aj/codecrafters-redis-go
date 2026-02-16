@@ -1,6 +1,11 @@
 package server
 
-import "time"
+import (
+	"time"
+
+	"github.com/codecrafters-io/redis-starter-go/app/server/lists"
+	"github.com/codecrafters-io/redis-starter-go/app/server/streams"
+)
 
 type store struct {
 	data map[string]object
@@ -15,25 +20,34 @@ func newStore() *store {
 }
 
 func (s *store) get(key string) (object, bool) {
-	v, ok := s.data[key]
+	o, ok := s.data[key]
 	if !ok {
 		return object{}, false
 	}
 
-	if v.isExpired() {
+	if o.isExpired() {
 		delete(s.data, key)
 		return object{}, false
 	}
 
-	return v, true
+	return o, true
 }
 
-func (s *store) set(key string, e object) {
-	if l, ok := e.value.([]string); ok && len(l) == 0 {
-		delete(s.data, key)
-	} else {
-		s.data[key] = e
+func (s *store) set(key string, o object) {
+	switch v := o.value.(type) {
+	case lists.List:
+		if len(v) == 0 {
+			delete(s.data, key)
+			return
+		}
+	case streams.Stream:
+		if len(v) == 0 {
+			delete(s.data, key)
+			return
+		}
 	}
+
+	s.data[key] = o
 }
 
 type object struct {

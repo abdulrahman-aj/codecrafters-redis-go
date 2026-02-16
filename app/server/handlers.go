@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
+	"github.com/codecrafters-io/redis-starter-go/app/server/lists"
+	"github.com/codecrafters-io/redis-starter-go/app/server/streams"
 )
 
 func (s *Server) handlePing(req *request) []byte {
@@ -82,20 +84,20 @@ func (s *Server) handleRpush(req *request) []byte {
 
 	o, ok := s.store.get(key)
 	if !ok {
-		o = object{value: []string{}}
+		o = object{value: lists.List{}}
 	}
 
-	list, ok := o.value.([]string)
+	l, ok := o.value.(lists.List)
 	if !ok {
 		return errWrongType
 	}
 
-	list = append(list, req.args[1:]...)
-	o.value = list
+	l = append(l, req.args[1:]...)
+	o.value = l
 
 	s.store.set(key, o)
 	req.touchedKeys = append(req.touchedKeys, key)
-	return resp.Integer(len(list))
+	return resp.Integer(len(l))
 }
 
 func (s *Server) handleLpush(req *request) []byte {
@@ -107,10 +109,10 @@ func (s *Server) handleLpush(req *request) []byte {
 
 	o, ok := s.store.get(key)
 	if !ok {
-		o = object{value: []string{}}
+		o = object{value: lists.List{}}
 	}
 
-	list, ok := o.value.([]string)
+	l, ok := o.value.(lists.List)
 	if !ok {
 		return errWrongType
 	}
@@ -118,12 +120,12 @@ func (s *Server) handleLpush(req *request) []byte {
 	elems := req.args[1:]
 	slices.Reverse(elems)
 
-	list = append(elems, list...) // TODO: consider using a linked-list to optimize this
-	o.value = list
+	l = append(elems, l...)
+	o.value = l
 
 	s.store.set(key, o)
 	req.touchedKeys = append(req.touchedKeys, key)
-	return resp.Integer(len(list))
+	return resp.Integer(len(l))
 }
 
 func (s *Server) handleLrange(req *request) []byte {
@@ -146,12 +148,12 @@ func (s *Server) handleLrange(req *request) []byte {
 		return resp.Array(nil)
 	}
 
-	list, ok := o.value.([]string)
+	l, ok := o.value.(lists.List)
 	if !ok {
 		return errWrongType
 	}
 
-	n := len(list)
+	n := len(l)
 	normalizeIndex := func(x int) int {
 		if x < 0 {
 			x += n
@@ -167,7 +169,7 @@ func (s *Server) handleLrange(req *request) []byte {
 		return resp.Array(nil)
 	}
 
-	return resp.Array(list[start:min(end+1, n)])
+	return resp.Array(l[start:min(end+1, n)])
 }
 
 func (s *Server) handleLlen(req *request) []byte {
@@ -181,12 +183,12 @@ func (s *Server) handleLlen(req *request) []byte {
 		return resp.Integer(0)
 	}
 
-	list, ok := o.value.([]string)
+	l, ok := o.value.(lists.List)
 	if !ok {
 		return errWrongType
 	}
 
-	return resp.Integer(len(list))
+	return resp.Integer(len(l))
 }
 
 func (s *Server) handleLpop(req *request) []byte {
@@ -214,14 +216,14 @@ func (s *Server) handleLpop(req *request) []byte {
 		return resp.NullBulkString
 	}
 
-	list, ok := o.value.([]string)
+	l, ok := o.value.(lists.List)
 	if !ok {
 		return errWrongType
 	}
 
-	count = min(count, len(list))
-	ret := list[:count]
-	o.value = list[count:]
+	count = min(count, len(l))
+	ret := l[:count]
+	o.value = l[count:]
 
 	s.store.set(key, o)
 	req.touchedKeys = append(req.touchedKeys, key)
@@ -260,16 +262,16 @@ func (s *Server) handleBlpop(req *request) ([]byte, bool) {
 		return nil, false
 	}
 
-	list, ok := o.value.([]string)
+	l, ok := o.value.(lists.List)
 	if !ok {
 		return nil, false
 	}
 
-	o.value = list[1:]
+	o.value = l[1:]
 	s.store.set(key, o)
 
 	req.touchedKeys = append(req.touchedKeys, key)
-	return resp.Array([]string{key, list[0]}), true
+	return resp.Array([]string{key, l[0]}), true
 }
 
 func (s *Server) handleType(req *request) []byte {
@@ -286,9 +288,9 @@ func (s *Server) handleType(req *request) []byte {
 	switch o.value.(type) {
 	case string:
 		return resp.SimpleString("string")
-	case []string:
+	case lists.List:
 		return resp.SimpleString("list")
-	case []map[string]string:
+	case streams.Stream:
 		return resp.SimpleString("stream")
 	default:
 		panic("unknown type?")
@@ -312,46 +314,25 @@ func (s *Server) handleXadd(req *request) []byte {
 
 	o, ok := s.store.get(key)
 	if !ok {
-		o = object{value: []map[string]string{}}
+		o = object{value: streams.Stream{}}
 	}
 
-	stream, ok := o.value.([]map[string]string)
+	stream, ok := o.value.(streams.Stream)
 	if !ok {
 		return errWrongType
 	}
 
-	parseEntryID := func(entryID string) (int, int, error) {
-		var milliSeconds, sequenceNumber int
-		_, err := fmt.Sscanf(entryID, "%d-%d", &milliSeconds, &sequenceNumber)
-		return milliSeconds, sequenceNumber, err
-	}
-
-	milliSeconds, sequenceNumber, err := parseEntryID(entryID)
+	ms, seq, err := stream.GenerateID(entryID)
 	if err != nil {
-		return resp.SimpleError("ERR Invalid stream ID specified as stream command argument")
+		return err
 	}
 
-	if milliSeconds <= 0 && sequenceNumber <= 0 {
-		return resp.SimpleError("ERR The ID specified in XADD must be greater than 0-0")
-	}
-
-	if len(stream) != 0 {
-		lastEntry := stream[len(stream)-1]
-		lastMilliSeconds, lastSequenceNumber, err := parseEntryID(lastEntry["id"])
-		if err != nil {
-			panic(err)
-		}
-
-		if milliSeconds < lastMilliSeconds ||
-			milliSeconds == lastMilliSeconds && sequenceNumber <= lastSequenceNumber {
-			return resp.SimpleError("ERR The ID specified in XADD is equal or smaller than the target stream top item")
-		}
-	}
-
-	streamEntry := map[string]string{"id": entryID}
+	streamEntry := streams.Entry{Ms: ms, Seq: seq}
 	for i := 0; i < len(kvs); i += 2 {
-		k, v := kvs[i], kvs[i+1]
-		streamEntry[k] = v
+		streamEntry.Fields = append(streamEntry.Fields, streams.Field{
+			Key:   kvs[i],
+			Value: kvs[i+1],
+		})
 	}
 
 	stream = append(stream, streamEntry)
@@ -360,7 +341,7 @@ func (s *Server) handleXadd(req *request) []byte {
 	s.store.set(key, o)
 	req.touchedKeys = append(req.touchedKeys, key)
 
-	return resp.BulkString(entryID)
+	return resp.BulkString(streamEntry.ID())
 }
 
 func errNumArgs(command string) []byte {
