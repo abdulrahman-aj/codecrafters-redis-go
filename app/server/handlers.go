@@ -322,26 +322,65 @@ func (s *Server) handleXadd(req *request) []byte {
 		return errWrongType
 	}
 
-	ms, seq, err := stream.GenerateID(entryID)
-	if err != nil {
-		return err
-	}
-
-	streamEntry := streams.Entry{Ms: ms, Seq: seq}
+	var fields []streams.Field
 	for i := 0; i < len(kvs); i += 2 {
-		streamEntry.Fields = append(streamEntry.Fields, streams.Field{
+		fields = append(fields, streams.Field{
 			Key:   kvs[i],
 			Value: kvs[i+1],
 		})
 	}
 
-	stream = append(stream, streamEntry)
+	id, err := stream.Append(entryID, fields)
+	if err != nil {
+		return err
+	}
 
 	o.value = stream
 	s.store.set(key, o)
 	req.touchedKeys = append(req.touchedKeys, key)
 
-	return resp.BulkString(streamEntry.ID())
+	return resp.BulkString(id)
+}
+
+func (s *Server) handleXrange(req *request) []byte {
+	if len(req.args) != 3 {
+		return errNumArgs(req.command)
+	}
+
+	var (
+		key   = req.args[0]
+		start = req.args[1]
+		end   = req.args[2]
+	)
+
+	o, ok := s.store.get(key)
+	if !ok {
+		o = object{value: streams.Stream{}}
+	}
+
+	stream, ok := o.value.(streams.Stream)
+	if !ok {
+		return errWrongType
+	}
+
+	entries, err := stream.Query(start, end)
+	if err != nil {
+		return err
+	}
+
+	ret := []any{}
+	for _, e := range entries {
+		kvs := []any{}
+
+		for _, field := range e.Fields {
+			kvs = append(kvs, field.Key)
+			kvs = append(kvs, field.Value)
+		}
+
+		ret = append(ret, []any{e.ID(), kvs})
+	}
+
+	return resp.Array(ret)
 }
 
 func errNumArgs(command string) []byte {
@@ -354,6 +393,7 @@ func errUnknownCommand(command string) []byte {
 	return resp.SimpleError(msg)
 }
 
+// TODO: cleanup/centralize error handling
 var (
 	errSyntaxError    = resp.SimpleError("ERR syntax error")
 	errInvalidInteger = resp.SimpleError("ERR value is not an integer or out of range")

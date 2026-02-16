@@ -2,6 +2,8 @@ package streams
 
 import (
 	"fmt"
+	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -9,7 +11,9 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 )
 
-type Stream []Entry
+type Stream struct {
+	entries []Entry
+}
 
 type Entry struct {
 	Ms     int // Milliseconds
@@ -26,16 +30,72 @@ type Field struct {
 	Value string
 }
 
-// GenerateID resolves a stream entry ID to (milliseconds, sequence).
-// Valid formats: "*" | "ms-*" | "ms-seq"
-// Validates that the ID exceeds the last entry (monotonic).
-// Returns RESP error for invalid format or non-monotonic ID.
-func (s Stream) GenerateID(entryID string) (int, int, []byte) {
+func (s *Stream) Append(entryID string, fields []Field) (string, []byte) {
+	ms, seq, err := s.generateID(entryID)
+	if err != nil {
+		return "", err
+	}
+
+	e := Entry{Ms: ms, Seq: seq, Fields: fields}
+	s.entries = append(s.entries, e)
+
+	return e.ID(), nil
+}
+
+func (s *Stream) Query(start, end string) ([]Entry, []byte) {
+	var (
+		startMs, startSeq int
+		endMs, endSeq     int
+		err               error
+	)
+
+	if strings.Contains(start, "-") {
+		startMs, startSeq, err = parseFullID(start)
+	} else {
+		startMs, err = strconv.Atoi(start)
+	}
+
+	if err != nil {
+		return nil, errInvalidStreamID
+	}
+
+	if strings.Contains(end, "-") {
+		endMs, endSeq, err = parseFullID(end)
+	} else {
+		endMs, err = strconv.Atoi(end)
+		endSeq = math.MaxInt
+	}
+
+	if err != nil {
+		return nil, errInvalidStreamID
+	}
+
+	lowerBound := sort.Search(len(s.entries), func(i int) bool {
+		e := s.entries[i]
+		return e.Ms >= startMs && e.Seq >= startSeq
+	})
+
+	upperBound := sort.Search(len(s.entries), func(i int) bool {
+		e := s.entries[i]
+		return e.Ms > endMs || e.Ms == endMs && e.Seq > endSeq
+	})
+
+	if lowerBound > upperBound {
+		return nil, nil
+	}
+
+	return s.entries[lowerBound:upperBound], nil
+}
+
+func (s *Stream) Len() int { return len(s.entries) }
+
+func (s *Stream) generateID(entryID string) (int, int, []byte) {
 	switch {
 	case entryID == "*":
 		return s.generateFullID()
 	case strings.HasSuffix(entryID, "-*"):
 		msStr, _ := strings.CutSuffix(entryID, "-*")
+
 		ms, err := strconv.Atoi(msStr)
 		if err != nil || ms < 0 {
 			return 0, 0, errInvalidStreamID
@@ -47,19 +107,19 @@ func (s Stream) GenerateID(entryID string) (int, int, []byte) {
 	}
 }
 
-func (s Stream) generateFullID() (int, int, []byte) {
+func (s *Stream) generateFullID() (int, int, []byte) {
 	return s.generatePartialID(int(time.Now().UnixMilli()))
 }
 
-func (s Stream) generatePartialID(ms int) (int, int, []byte) {
-	if len(s) == 0 {
+func (s *Stream) generatePartialID(ms int) (int, int, []byte) {
+	if len(s.entries) == 0 {
 		if ms == 0 {
 			return 0, 1, nil
 		}
 		return ms, 0, nil
 	}
 
-	last := s[len(s)-1]
+	last := s.entries[len(s.entries)-1]
 
 	switch {
 	case last.Ms > ms:
@@ -72,8 +132,8 @@ func (s Stream) generatePartialID(ms int) (int, int, []byte) {
 }
 
 func (s Stream) validateID(entryID string) (int, int, []byte) {
-	var ms, seq int
-	if _, err := fmt.Sscanf(entryID, "%d-%d", &ms, &seq); err != nil || ms < 0 || seq < 0 {
+	ms, seq, err := parseFullID(entryID)
+	if err != nil || ms < 0 || seq < 0 {
 		return 0, 0, errInvalidStreamID
 	}
 
@@ -81,15 +141,21 @@ func (s Stream) validateID(entryID string) (int, int, []byte) {
 		return 0, 0, errXaddZeroID
 	}
 
-	if len(s) == 0 {
+	if len(s.entries) == 0 {
 		return ms, seq, nil
 	}
 
-	if last := s[len(s)-1]; ms < last.Ms || ms == last.Ms && seq <= last.Seq {
+	if last := s.entries[len(s.entries)-1]; ms < last.Ms || ms == last.Ms && seq <= last.Seq {
 		return 0, 0, errXaddEqualOrSmaller
 	}
 
 	return ms, seq, nil
+}
+
+func parseFullID(entryID string) (int, int, error) {
+	var ms, seq int
+	_, err := fmt.Sscanf(entryID, "%d-%d", &ms, &seq)
+	return ms, seq, err
 }
 
 var (

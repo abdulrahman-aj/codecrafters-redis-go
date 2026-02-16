@@ -41,7 +41,7 @@ func (s *store) set(key string, o object) {
 			return
 		}
 	case streams.Stream:
-		if len(v) == 0 {
+		if v.Len() == 0 {
 			delete(s.data, key)
 			return
 		}

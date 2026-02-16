@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+
+	"github.com/codecrafters-io/redis-starter-go/app/server/lists"
 )
 
 type Reader struct {
@@ -118,11 +120,34 @@ func Integer(v int) []byte {
 	return fmt.Appendf(nil, ":%d\r\n", v)
 }
 
-func Array(arr []string) []byte {
-	ret := fmt.Appendf(nil, "*%d\r\n", len(arr))
-	for _, x := range arr {
-		ret = append(ret, BulkString(x)...)
+// TODO: messy. consider interfaces, generics, or reflection...
+func Array(arr any) []byte {
+	var ret []byte
+
+	switch arr := arr.(type) {
+	case lists.List:
+		ret = fmt.Appendf(nil, "*%d\r\n", len(arr))
+		for _, x := range arr {
+			ret = append(ret, BulkString(x)...)
+		}
+	case []any:
+		ret = fmt.Appendf(nil, "*%d\r\n", len(arr))
+		for _, x := range arr {
+			switch x := x.(type) {
+			case string:
+				ret = append(ret, BulkString(x)...)
+			case []any:
+				ret = append(ret, Array(x)...)
+			default:
+				panic("TODO: not implemented")
+			}
+		}
+	case nil:
+		ret = fmt.Appendf(nil, "*%d\r\n", 0)
+	default:
+		panic("TODO: not implemented")
 	}
+
 	return ret
 }
 
