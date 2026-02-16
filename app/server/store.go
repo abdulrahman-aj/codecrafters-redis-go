@@ -3,7 +3,7 @@ package server
 import "time"
 
 type store struct {
-	data map[string]entry
+	data map[string]object
 
 	// TODO:
 	// - implement background GC in addition to lazy delete, e.g: by sending a "gc" request to the event loop
@@ -11,24 +11,24 @@ type store struct {
 }
 
 func newStore() *store {
-	return &store{data: map[string]entry{}}
+	return &store{data: map[string]object{}}
 }
 
-func (s *store) get(key string) (entry, bool) {
+func (s *store) get(key string) (object, bool) {
 	v, ok := s.data[key]
 	if !ok {
-		return entry{}, false
+		return object{}, false
 	}
 
 	if v.isExpired() {
 		delete(s.data, key)
-		return entry{}, false
+		return object{}, false
 	}
 
 	return v, true
 }
 
-func (s *store) set(key string, e entry) {
+func (s *store) set(key string, e object) {
 	if l, ok := e.value.([]string); ok && len(l) == 0 {
 		delete(s.data, key)
 	} else {
@@ -36,11 +36,11 @@ func (s *store) set(key string, e entry) {
 	}
 }
 
-type entry struct {
+type object struct {
 	value     any
 	expiresAt time.Time
 }
 
-func (e *entry) isExpired() bool {
+func (e *object) isExpired() bool {
 	return !e.expiresAt.IsZero() && time.Now().After(e.expiresAt)
 }

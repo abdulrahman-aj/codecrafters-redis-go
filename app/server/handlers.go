@@ -48,7 +48,7 @@ func (s *Server) handleSet(req *request) []byte {
 	}
 
 	key, value := req.args[0], req.args[1]
-	s.store.set(key, entry{value: value, expiresAt: expiresAt})
+	s.store.set(key, object{value: value, expiresAt: expiresAt})
 	req.touchedKeys = append(req.touchedKeys, key)
 
 	return resp.SimpleString("OK")
@@ -60,12 +60,12 @@ func (s *Server) handleGet(req *request) []byte {
 	}
 
 	key := req.args[0]
-	e, ok := s.store.get(key)
+	o, ok := s.store.get(key)
 	if !ok {
 		return resp.NullBulkString
 	}
 
-	valueStr, ok := e.value.(string)
+	valueStr, ok := o.value.(string)
 	if !ok {
 		return errWrongType
 	}
@@ -80,20 +80,20 @@ func (s *Server) handleRpush(req *request) []byte {
 
 	key := req.args[0]
 
-	e, ok := s.store.get(key)
+	o, ok := s.store.get(key)
 	if !ok {
-		e = entry{value: []string{}}
+		o = object{value: []string{}}
 	}
 
-	list, ok := e.value.([]string)
+	list, ok := o.value.([]string)
 	if !ok {
 		return errWrongType
 	}
 
 	list = append(list, req.args[1:]...)
-	e.value = list
+	o.value = list
 
-	s.store.set(key, e)
+	s.store.set(key, o)
 	req.touchedKeys = append(req.touchedKeys, key)
 	return resp.Integer(len(list))
 }
@@ -105,12 +105,12 @@ func (s *Server) handleLpush(req *request) []byte {
 
 	key := req.args[0]
 
-	e, ok := s.store.get(key)
+	o, ok := s.store.get(key)
 	if !ok {
-		e = entry{value: []string{}}
+		o = object{value: []string{}}
 	}
 
-	list, ok := e.value.([]string)
+	list, ok := o.value.([]string)
 	if !ok {
 		return errWrongType
 	}
@@ -119,9 +119,9 @@ func (s *Server) handleLpush(req *request) []byte {
 	slices.Reverse(elems)
 
 	list = append(elems, list...) // TODO: consider using a linked-list to optimize this
-	e.value = list
+	o.value = list
 
-	s.store.set(key, e)
+	s.store.set(key, o)
 	req.touchedKeys = append(req.touchedKeys, key)
 	return resp.Integer(len(list))
 }
@@ -141,12 +141,12 @@ func (s *Server) handleLrange(req *request) []byte {
 		return errInvalidInteger
 	}
 
-	e, ok := s.store.get(key)
+	o, ok := s.store.get(key)
 	if !ok {
 		return resp.Array(nil)
 	}
 
-	list, ok := e.value.([]string)
+	list, ok := o.value.([]string)
 	if !ok {
 		return errWrongType
 	}
@@ -176,12 +176,12 @@ func (s *Server) handleLlen(req *request) []byte {
 	}
 
 	key := req.args[0]
-	e, ok := s.store.get(key)
+	o, ok := s.store.get(key)
 	if !ok {
 		return resp.Integer(0)
 	}
 
-	list, ok := e.value.([]string)
+	list, ok := o.value.([]string)
 	if !ok {
 		return errWrongType
 	}
@@ -209,21 +209,21 @@ func (s *Server) handleLpop(req *request) []byte {
 		return errMustBePositive
 	}
 
-	e, ok := s.store.get(key)
+	o, ok := s.store.get(key)
 	if !ok {
 		return resp.NullBulkString
 	}
 
-	list, ok := e.value.([]string)
+	list, ok := o.value.([]string)
 	if !ok {
 		return errWrongType
 	}
 
 	count = min(count, len(list))
 	ret := list[:count]
-	e.value = list[count:]
+	o.value = list[count:]
 
-	s.store.set(key, e)
+	s.store.set(key, o)
 	req.touchedKeys = append(req.touchedKeys, key)
 
 	if len(req.args) == 1 {
@@ -255,18 +255,18 @@ func (s *Server) handleBlpop(req *request) ([]byte, bool) {
 		return resp.NullArray, true
 	}
 
-	e, ok := s.store.get(key)
+	o, ok := s.store.get(key)
 	if !ok {
 		return nil, false
 	}
 
-	list, ok := e.value.([]string)
+	list, ok := o.value.([]string)
 	if !ok {
 		return nil, false
 	}
 
-	e.value = list[1:]
-	s.store.set(key, e)
+	o.value = list[1:]
+	s.store.set(key, o)
 
 	req.touchedKeys = append(req.touchedKeys, key)
 	return resp.Array([]string{key, list[0]}), true
@@ -278,12 +278,12 @@ func (s *Server) handleType(req *request) []byte {
 	}
 
 	key := req.args[0]
-	e, ok := s.store.get(key)
+	o, ok := s.store.get(key)
 	if !ok {
 		return resp.SimpleString("none")
 	}
 
-	switch e.value.(type) {
+	switch o.value.(type) {
 	case string:
 		return resp.SimpleString("string")
 	case []string:
@@ -310,12 +310,12 @@ func (s *Server) handleXadd(req *request) []byte {
 		return errNumArgs(req.command)
 	}
 
-	e, ok := s.store.get(key)
+	o, ok := s.store.get(key)
 	if !ok {
-		e = entry{value: []map[string]string{}}
+		o = object{value: []map[string]string{}}
 	}
 
-	stream, ok := e.value.([]map[string]string)
+	stream, ok := o.value.([]map[string]string)
 	if !ok {
 		return errWrongType
 	}
@@ -356,8 +356,8 @@ func (s *Server) handleXadd(req *request) []byte {
 
 	stream = append(stream, streamEntry)
 
-	e.value = stream
-	s.store.set(key, e)
+	o.value = stream
+	s.store.set(key, o)
 	req.touchedKeys = append(req.touchedKeys, key)
 
 	return resp.BulkString(entryID)
