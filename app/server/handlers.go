@@ -363,21 +363,64 @@ func (s *Server) handleXrange(req *request) []byte {
 		return errWrongType
 	}
 
-	entries, err := stream.Query(start, end)
+	entries, err := stream.Between(start, end)
 	if err != nil {
 		return err
 	}
 
 	ret := []any{}
 	for _, e := range entries {
-		kvs := []any{}
+		ret = append(ret, e.Format())
+	}
 
-		for _, field := range e.Fields {
-			kvs = append(kvs, field.Key)
-			kvs = append(kvs, field.Value)
+	return resp.Array(ret)
+}
+
+func (s *Server) handleXread(req *request) []byte {
+	if len(req.args) < 3 {
+		return errNumArgs(req.command)
+	}
+
+	if strings.ToLower(req.args[0]) != "streams" {
+		return errSyntaxError
+	}
+
+	keysAndIDs := req.args[1:]
+
+	if len(keysAndIDs)%2 != 0 {
+		return errUnbalancedXread
+	}
+
+	var (
+		numKeys = len(keysAndIDs) / 2
+		keys    = keysAndIDs[:numKeys]
+		ids     = keysAndIDs[numKeys:]
+		ret     []any
+	)
+
+	for i := range numKeys {
+		o, ok := s.store.get(keys[i])
+		if !ok {
+			continue
 		}
 
-		ret = append(ret, []any{e.ID(), kvs})
+		stream, ok := o.value.(streams.Stream)
+		if !ok {
+			return errWrongType
+		}
+
+		entries, err := stream.After(ids[i])
+		if err != nil {
+			return err
+		}
+
+		if len(entries) != 0 {
+			var formatted []any
+			for _, e := range entries {
+				formatted = append(formatted, e.Format())
+			}
+			ret = append(ret, []any{keys[i], formatted})
+		}
 	}
 
 	return resp.Array(ret)
@@ -395,9 +438,10 @@ func errUnknownCommand(command string) []byte {
 
 // TODO: cleanup/centralize error handling
 var (
-	errSyntaxError    = resp.SimpleError("ERR syntax error")
-	errInvalidInteger = resp.SimpleError("ERR value is not an integer or out of range")
-	errInvalidTimeout = resp.SimpleError("ERR timeout is not a float or out of range")
-	errMustBePositive = resp.SimpleError("ERR value is out of range, must be positive")
-	errWrongType      = resp.SimpleError("WRONGTYPE Operation against a key holding the wrong kind of value")
+	errSyntaxError     = resp.SimpleError("ERR syntax error")
+	errInvalidInteger  = resp.SimpleError("ERR value is not an integer or out of range")
+	errInvalidTimeout  = resp.SimpleError("ERR timeout is not a float or out of range")
+	errMustBePositive  = resp.SimpleError("ERR value is out of range, must be positive")
+	errWrongType       = resp.SimpleError("WRONGTYPE Operation against a key holding the wrong kind of value")
+	errUnbalancedXread = resp.SimpleError("ERR Unbalanced 'xread' list of streams: for each stream key an ID, '+', or '$' must be specified.")
 )

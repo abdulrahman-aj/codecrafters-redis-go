@@ -21,6 +21,17 @@ type Entry struct {
 	Fields []Field
 }
 
+func (e *Entry) Format() []any {
+	kvs := []any{}
+
+	for _, field := range e.Fields {
+		kvs = append(kvs, field.Key)
+		kvs = append(kvs, field.Value)
+	}
+
+	return []any{e.ID(), kvs}
+}
+
 func (e *Entry) ID() string {
 	return fmt.Sprintf("%d-%d", e.Ms, e.Seq)
 }
@@ -42,7 +53,7 @@ func (s *Stream) Append(entryID string, fields []Field) (string, []byte) {
 	return e.ID(), nil
 }
 
-func (s *Stream) Query(start, end string) ([]Entry, []byte) {
+func (s *Stream) Between(start, end string) ([]Entry, []byte) {
 	var (
 		startMs, startSeq int
 		endMs, endSeq     int
@@ -52,7 +63,7 @@ func (s *Stream) Query(start, end string) ([]Entry, []byte) {
 	if start == "-" {
 		startMs, startSeq = 0, 0
 	} else if strings.Contains(start, "-") {
-		startMs, startSeq, err = parseFullID(start)
+		startMs, startSeq, err = parseID(start)
 	} else {
 		startMs, err = strconv.Atoi(start)
 	}
@@ -64,7 +75,7 @@ func (s *Stream) Query(start, end string) ([]Entry, []byte) {
 	if end == "+" {
 		endMs, endSeq = math.MaxInt, math.MaxInt
 	} else if strings.Contains(end, "-") {
-		endMs, endSeq, err = parseFullID(end)
+		endMs, endSeq, err = parseID(end)
 	} else {
 		endMs, err = strconv.Atoi(end)
 		endSeq = math.MaxInt
@@ -74,21 +85,37 @@ func (s *Stream) Query(start, end string) ([]Entry, []byte) {
 		return nil, errInvalidStreamID
 	}
 
-	lowerBound := sort.Search(len(s.entries), func(i int) bool {
-		e := s.entries[i]
-		return e.Ms >= startMs && e.Seq >= startSeq
-	})
-
-	upperBound := sort.Search(len(s.entries), func(i int) bool {
-		e := s.entries[i]
-		return e.Ms > endMs || e.Ms == endMs && e.Seq > endSeq
-	})
-
-	if lowerBound > upperBound {
+	lb := s.lowerBound(startMs, startSeq)
+	ub := s.upperBound(endMs, endSeq)
+	if lb > ub {
 		return nil, nil
 	}
 
-	return s.entries[lowerBound:upperBound], nil
+	return s.entries[lb:ub], nil
+}
+
+func (s *Stream) After(start string) ([]Entry, []byte) {
+	ms, seq, err := parseID(start)
+	if err != nil {
+		return nil, errInvalidStreamID
+	}
+
+	ub := s.upperBound(ms, seq)
+	return s.entries[ub:], nil
+}
+
+func (s *Stream) lowerBound(ms, seq int) int {
+	return sort.Search(len(s.entries), func(i int) bool {
+		e := s.entries[i]
+		return e.Ms >= ms && e.Seq >= seq
+	})
+}
+
+func (s *Stream) upperBound(ms, seq int) int {
+	return sort.Search(len(s.entries), func(i int) bool {
+		e := s.entries[i]
+		return e.Ms > ms || e.Ms == ms && e.Seq > seq
+	})
 }
 
 func (s *Stream) Len() int { return len(s.entries) }
@@ -136,7 +163,7 @@ func (s *Stream) generatePartialID(ms int) (int, int, []byte) {
 }
 
 func (s Stream) validateID(entryID string) (int, int, []byte) {
-	ms, seq, err := parseFullID(entryID)
+	ms, seq, err := parseID(entryID)
 	if err != nil || ms < 0 || seq < 0 {
 		return 0, 0, errInvalidStreamID
 	}
@@ -156,7 +183,7 @@ func (s Stream) validateID(entryID string) (int, int, []byte) {
 	return ms, seq, nil
 }
 
-func parseFullID(entryID string) (int, int, error) {
+func parseID(entryID string) (int, int, error) {
 	var ms, seq int
 	_, err := fmt.Sscanf(entryID, "%d-%d", &ms, &seq)
 	return ms, seq, err

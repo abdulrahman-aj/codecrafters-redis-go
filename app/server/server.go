@@ -138,6 +138,8 @@ func (s *Server) handle(msg *envelope) {
 		res = s.handleXadd(msg.req)
 	case "xrange":
 		res = s.handleXrange(msg.req)
+	case "xread":
+		res = s.handleXread(msg.req)
 	default:
 		res = errUnknownCommand(msg.req.command)
 	}
