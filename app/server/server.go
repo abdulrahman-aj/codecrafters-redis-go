@@ -35,18 +35,20 @@ func (e *envelope) before(other *envelope) bool {
 }
 
 type request struct {
-	id          int64
-	command     string
-	args        []string
-	requestedAt time.Time
-	deadline    time.Time
-	dependency  string
-	touchedKeys []string
+	id           int64
+	command      string
+	args         []string
+	requestedAt  time.Time
+	deadline     time.Time
+	dependencies []string
+	touchedKeys  []string
 }
 
 func (r *request) isExpired() bool {
 	return !r.deadline.IsZero() && time.Now().After(r.deadline)
 }
+
+func (r *request) hasDeadline() bool { return !r.deadline.IsZero() }
 
 func New() *Server {
 	return &Server{
@@ -139,7 +141,7 @@ func (s *Server) handle(msg *envelope) {
 	case "xrange":
 		res = s.handleXrange(msg.req)
 	case "xread":
-		res = s.handleXread(msg.req)
+		res, done = s.handleXread(msg.req)
 	default:
 		res = errUnknownCommand(msg.req.command)
 	}

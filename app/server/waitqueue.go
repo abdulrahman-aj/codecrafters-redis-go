@@ -24,22 +24,28 @@ func newWaitQueue() *waitQueue {
 }
 
 func (q *waitQueue) enqueue(msg *envelope) {
-	q.byTime.Enqueue(msg)
-
-	if _, ok := q.byDependency[msg.req.dependency]; !ok {
-		q.byDependency[msg.req.dependency] = map[int64]*envelope{}
+	if msg.req.hasDeadline() {
+		q.byTime.Enqueue(msg)
 	}
 
-	q.byDependency[msg.req.dependency][msg.req.id] = msg
+	for _, dependency := range msg.req.dependencies {
+		if _, ok := q.byDependency[dependency]; !ok {
+			q.byDependency[dependency] = map[int64]*envelope{}
+		}
+
+		q.byDependency[dependency][msg.req.id] = msg
+	}
 }
 
 func (q *waitQueue) remove(msg *envelope) {
 	q.byTime.Remove(msg)
 
-	if m, ok := q.byDependency[msg.req.dependency]; ok {
-		delete(m, msg.req.id)
-		if len(m) == 0 {
-			delete(q.byDependency, msg.req.dependency)
+	for _, dependency := range msg.req.dependencies {
+		if m, ok := q.byDependency[dependency]; ok {
+			delete(m, msg.req.id)
+			if len(m) == 0 {
+				delete(q.byDependency, dependency)
+			}
 		}
 	}
 }

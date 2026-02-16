@@ -243,10 +243,10 @@ func (s *Server) handleBlpop(req *request) ([]byte, bool) {
 	key := req.args[0]
 	timeout, err := strconv.ParseFloat(req.args[1], 64)
 	if err != nil {
-		return errInvalidTimeout, true
+		return errTimeoutNotFloat, true
 	}
 
-	req.dependency = key
+	req.dependencies = []string{key}
 
 	if timeout != 0 {
 		duration := time.Duration(timeout * float64(time.Second))
@@ -269,8 +269,8 @@ func (s *Server) handleBlpop(req *request) ([]byte, bool) {
 
 	o.value = l[1:]
 	s.store.set(key, o)
-
 	req.touchedKeys = append(req.touchedKeys, key)
+
 	return resp.Array([]string{key, l[0]}), true
 }
 
@@ -376,19 +376,50 @@ func (s *Server) handleXrange(req *request) []byte {
 	return resp.Array(ret)
 }
 
-func (s *Server) handleXread(req *request) []byte {
+func (s *Server) handleXread(req *request) ([]byte, bool) {
 	if len(req.args) < 3 {
-		return errNumArgs(req.command)
+		return errNumArgs(req.command), true
 	}
 
-	if strings.ToLower(req.args[0]) != "streams" {
-		return errSyntaxError
+	var (
+		isBlocking = strings.EqualFold(req.args[0], "block")
+		keysAndIDs []string
+	)
+
+	if isBlocking {
+		if len(req.args) < 5 { // block ms streams k1 v1
+			return errNumArgs(req.command), true
+		}
+
+		if !strings.EqualFold(req.args[2], "streams") {
+			fmt.Println("hello??", req.args[2])
+			return errSyntaxError, true
+		}
+
+		timeoutMs, err := strconv.Atoi(req.args[1])
+		if err != nil {
+			return errTimeoutNotInt, true
+		}
+
+		if timeoutMs != 0 {
+			req.deadline = req.requestedAt.Add(time.Duration(timeoutMs) * time.Millisecond)
+		}
+
+		keysAndIDs = req.args[3:]
+	} else {
+		if !strings.EqualFold(req.args[0], "streams") {
+			return errSyntaxError, true
+		}
+
+		keysAndIDs = req.args[1:]
 	}
 
-	keysAndIDs := req.args[1:]
+	if req.isExpired() {
+		return resp.NullArray, true
+	}
 
 	if len(keysAndIDs)%2 != 0 {
-		return errUnbalancedXread
+		return errUnbalancedXread, true
 	}
 
 	var (
@@ -398,6 +429,8 @@ func (s *Server) handleXread(req *request) []byte {
 		ret     []any
 	)
 
+	req.dependencies = keys
+
 	for i := range numKeys {
 		o, ok := s.store.get(keys[i])
 		if !ok {
@@ -406,12 +439,12 @@ func (s *Server) handleXread(req *request) []byte {
 
 		stream, ok := o.value.(streams.Stream)
 		if !ok {
-			return errWrongType
+			return errWrongType, true
 		}
 
 		entries, err := stream.After(ids[i])
 		if err != nil {
-			return err
+			return err, true
 		}
 
 		if len(entries) != 0 {
@@ -423,7 +456,11 @@ func (s *Server) handleXread(req *request) []byte {
 		}
 	}
 
-	return resp.Array(ret)
+	if isBlocking && len(ret) == 0 {
+		return nil, false
+	}
+
+	return resp.Array(ret), true
 }
 
 func errNumArgs(command string) []byte {
@@ -440,7 +477,8 @@ func errUnknownCommand(command string) []byte {
 var (
 	errSyntaxError     = resp.SimpleError("ERR syntax error")
 	errInvalidInteger  = resp.SimpleError("ERR value is not an integer or out of range")
-	errInvalidTimeout  = resp.SimpleError("ERR timeout is not a float or out of range")
+	errTimeoutNotFloat = resp.SimpleError("ERR timeout is not a float or out of range")
+	errTimeoutNotInt   = resp.SimpleError("ERR timeout is not an integer or out of range")
 	errMustBePositive  = resp.SimpleError("ERR value is out of range, must be positive")
 	errWrongType       = resp.SimpleError("WRONGTYPE Operation against a key holding the wrong kind of value")
 	errUnbalancedXread = resp.SimpleError("ERR Unbalanced 'xread' list of streams: for each stream key an ID, '+', or '$' must be specified.")
