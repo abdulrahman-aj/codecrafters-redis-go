@@ -49,7 +49,9 @@ func (s *Stream) Query(start, end string) ([]Entry, []byte) {
 		err               error
 	)
 
-	if strings.Contains(start, "-") {
+	if start == "-" {
+		startMs, startSeq = 0, 0
+	} else if strings.Contains(start, "-") {
 		startMs, startSeq, err = parseFullID(start)
 	} else {
 		startMs, err = strconv.Atoi(start)
@@ -59,7 +61,9 @@ func (s *Stream) Query(start, end string) ([]Entry, []byte) {
 		return nil, errInvalidStreamID
 	}
 
-	if strings.Contains(end, "-") {
+	if end == "+" {
+		endMs, endSeq = math.MaxInt, math.MaxInt
+	} else if strings.Contains(end, "-") {
 		endMs, endSeq, err = parseFullID(end)
 	} else {
 		endMs, err = strconv.Atoi(end)
