@@ -116,7 +116,7 @@ func (s *Stream) After(start string) ([]Entry, []byte) {
 func (s *Stream) lowerBound(ms, seq int) int {
 	return sort.Search(len(s.entries), func(i int) bool {
 		e := s.entries[i]
-		return e.Ms >= ms && e.Seq >= seq
+		return e.Ms > ms || e.Ms == ms && e.Seq >= seq
 	})
 }
 
