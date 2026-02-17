@@ -7,11 +7,15 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/containers"
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
+	"github.com/codecrafters-io/redis-starter-go/app/server/commands"
+	"github.com/codecrafters-io/redis-starter-go/app/server/errors"
+	"github.com/codecrafters-io/redis-starter-go/app/server/request"
+	"github.com/codecrafters-io/redis-starter-go/app/server/store"
 )
 
 type Server struct {
 	inbox chan *envelope
-	store *store
+	store *store.Store
 
 	// Contains requests that are blocked on some key
 	waitQueue *waitQueue
@@ -24,36 +28,20 @@ type Server struct {
 }
 
 type envelope struct {
-	req        *request
+	ctx        *request.Context
 	responseCh chan<- []byte
 }
 
-func (e *envelope) key() int64 { return e.req.id }
+func (e *envelope) key() int64 { return e.ctx.RequestID }
 
 func (e *envelope) before(other *envelope) bool {
-	return e.req.requestedAt.Before(other.req.requestedAt)
+	return e.ctx.RequestedAt.Before(other.ctx.RequestedAt)
 }
-
-type request struct {
-	id           int64
-	command      string
-	args         []string
-	requestedAt  time.Time
-	deadline     time.Time
-	dependencies []string
-	touchedKeys  []string
-}
-
-func (r *request) isExpired() bool {
-	return !r.deadline.IsZero() && time.Now().After(r.deadline)
-}
-
-func (r *request) hasDeadline() bool { return !r.deadline.IsZero() }
 
 func New() *Server {
 	return &Server{
 		inbox:     make(chan *envelope),
-		store:     newStore(),
+		store:     store.New(),
 		waitQueue: newWaitQueue(),
 		readyQueue: containers.NewIndexedPriorityQueue(
 			(*envelope).key,
@@ -96,11 +84,13 @@ func (s *Server) Do(c any) []byte {
 
 	s.inbox <- &envelope{
 		responseCh: ch,
-		req: &request{
-			id:          s.lastID.Add(1),
-			command:     command,
-			args:        args,
-			requestedAt: time.Now(),
+		ctx: &request.Context{
+			RequestID:    s.lastID.Add(1),
+			Command:      command,
+			Args:         args,
+			RequestedAt:  time.Now(),
+			Dependencies: map[string]bool{},
+			TouchedKeys:  map[string]bool{},
 		},
 	}
 
@@ -109,53 +99,72 @@ func (s *Server) Do(c any) []byte {
 
 func (s *Server) handle(msg *envelope) {
 	var (
-		res  []byte
-		done = true
+		cmd commands.Command
+		err error
 	)
 
-	switch msg.req.command {
+	switch msg.ctx.Command {
 	case "ping":
-		res = s.handlePing(msg.req)
+		cmd, err = commands.ParsePing(msg.ctx)
 	case "echo":
-		res = s.handleEcho(msg.req)
+		cmd, err = commands.ParseEcho(msg.ctx)
 	case "set":
-		res = s.handleSet(msg.req)
+		cmd, err = commands.ParseSet(msg.ctx)
 	case "get":
-		res = s.handleGet(msg.req)
+		cmd, err = commands.ParseGet(msg.ctx)
 	case "rpush":
-		res = s.handleRpush(msg.req)
+		cmd, err = commands.ParseRpush(msg.ctx)
 	case "lpush":
-		res = s.handleLpush(msg.req)
+		cmd, err = commands.ParseLpush(msg.ctx)
 	case "lrange":
-		res = s.handleLrange(msg.req)
+		cmd, err = commands.ParseLrange(msg.ctx)
 	case "llen":
-		res = s.handleLlen(msg.req)
+		cmd, err = commands.ParseLlen(msg.ctx)
 	case "lpop":
-		res = s.handleLpop(msg.req)
+		cmd, err = commands.ParseLpop(msg.ctx)
 	case "blpop":
-		res, done = s.handleBlpop(msg.req)
+		cmd, err = commands.ParseBlpop(msg.ctx)
 	case "type":
-		res = s.handleType(msg.req)
+		cmd, err = commands.ParseType(msg.ctx)
 	case "xadd":
-		res = s.handleXadd(msg.req)
+		cmd, err = commands.ParseXadd(msg.ctx)
 	case "xrange":
-		res = s.handleXrange(msg.req)
+		cmd, err = commands.ParseXrange(msg.ctx)
 	case "xread":
-		res, done = s.handleXread(msg.req)
+		cmd, err = commands.ParseXread(msg.ctx)
 	default:
-		res = errUnknownCommand(msg.req.command)
+		err = errors.UknownCommand(msg.ctx)
 	}
 
-	if !done {
+	// TODO: consider adding --verbose logging
+	if err != nil {
+		s.handleErr(msg, err)
+		return
+	}
+
+	res, err := cmd.Exec(msg.ctx, s.store)
+	if err != nil {
+		s.handleErr(msg, err)
+		return
+	}
+
+	msg.responseCh <- res
+	s.wakeWaiters(msg.ctx)
+}
+
+func (s *Server) handleErr(msg *envelope, err error) {
+	if clientError, ok := err.(*errors.ClientError); ok {
+		msg.responseCh <- clientError.SerializeToResp()
+		s.wakeWaiters(msg.ctx) // TODO: unneeded?
+	} else if errors.Is(err, errors.Blocked) {
 		s.waitQueue.enqueue(msg)
 	} else {
-		msg.responseCh <- res
-		s.wakeWaiters(msg.req.touchedKeys)
+		panic(clientError)
 	}
 }
 
-func (s *Server) wakeWaiters(touchedKeys []string) {
-	for _, key := range touchedKeys {
+func (s *Server) wakeWaiters(ctx *request.Context) {
+	for key := range ctx.TouchedKeys {
 		for _, msg := range s.waitQueue.dequeueWaiters(key) {
 			s.readyQueue.Enqueue(msg)
 		}

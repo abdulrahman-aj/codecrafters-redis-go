@@ -24,25 +24,25 @@ func newWaitQueue() *waitQueue {
 }
 
 func (q *waitQueue) enqueue(msg *envelope) {
-	if msg.req.hasDeadline() {
+	if msg.ctx.HasDeadline() {
 		q.byTime.Enqueue(msg)
 	}
 
-	for _, dependency := range msg.req.dependencies {
+	for dependency := range msg.ctx.Dependencies {
 		if _, ok := q.byDependency[dependency]; !ok {
 			q.byDependency[dependency] = map[int64]*envelope{}
 		}
 
-		q.byDependency[dependency][msg.req.id] = msg
+		q.byDependency[dependency][msg.ctx.RequestID] = msg
 	}
 }
 
 func (q *waitQueue) remove(msg *envelope) {
 	q.byTime.Remove(msg)
 
-	for _, dependency := range msg.req.dependencies {
+	for dependency := range msg.ctx.Dependencies {
 		if m, ok := q.byDependency[dependency]; ok {
-			delete(m, msg.req.id)
+			delete(m, msg.ctx.RequestID)
 			if len(m) == 0 {
 				delete(q.byDependency, dependency)
 			}
@@ -56,7 +56,7 @@ func (q *waitQueue) timeUntilNext() (time.Duration, bool) {
 		return 0, false
 	}
 
-	return time.Until(msg.req.deadline), true
+	return time.Until(msg.ctx.Deadline), true
 }
 
 func (q *waitQueue) dequeueWaiters(key string) []*envelope {
@@ -75,7 +75,7 @@ func (q *waitQueue) dequeueExpired() []*envelope {
 	now := time.Now()
 	for q.byTime.Len() > 0 {
 		msg, _ := q.byTime.Peek()
-		if now.Before(msg.req.deadline) {
+		if now.Before(msg.ctx.Deadline) {
 			break
 		} else {
 			expired = append(expired, msg)
