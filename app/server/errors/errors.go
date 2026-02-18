@@ -29,16 +29,17 @@ func UknownCommand(command string) error {
 }
 
 var (
-	InvalidInteger    = newClientError("ERR value is not an integer or out of range")
-	SyntaxError       = newClientError("ERR syntax error")
-	WrongType         = newClientError("WRONGTYPE Operation against a key holding the wrong kind of value")
-	MustBePositive    = newClientError("ERR value is out of range, must be positive")
-	TimeoutNotFloat   = newClientError("ERR timeout is not a float or out of range")
-	TimeoutNotInt     = newClientError("ERR timeout is not an integer or out of range")
-	TimeoutNegative   = newClientError("ERR timeout is negative")
-	UnbalancedXread   = newClientError("ERR Unbalanced 'xread' list of streams: for each stream key an ID, '+', or '$' must be specified.")
-	NestedTransaction = newClientError("ERR MULTI calls can not be nested")
-	ExecWithoutMulti  = newClientError("ERR EXEC without MULTI")
+	InvalidInteger      = newClientError("ERR value is not an integer or out of range")
+	SyntaxError         = newClientError("ERR syntax error")
+	WrongType           = newClientError("WRONGTYPE Operation against a key holding the wrong kind of value")
+	MustBePositive      = newClientError("ERR value is out of range, must be positive")
+	TimeoutNotFloat     = newClientError("ERR timeout is not a float or out of range")
+	TimeoutNotInt       = newClientError("ERR timeout is not an integer or out of range")
+	TimeoutNegative     = newClientError("ERR timeout is negative")
+	UnbalancedXread     = newClientError("ERR Unbalanced 'xread' list of streams: for each stream key an ID, '+', or '$' must be specified.")
+	NestedTransaction   = newClientError("ERR MULTI calls can not be nested")
+	ExecWithoutMulti    = newClientError("ERR EXEC without MULTI")
+	DiscardWithoutMulti = newClientError("ERR DISCARD without MULTI")
 )
 
 // A special error value that indicates whether an operation

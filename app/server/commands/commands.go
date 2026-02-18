@@ -12,11 +12,16 @@ type Command interface {
 }
 
 func Parse(ctx *context.Request, command string, args []string) (Command, error) {
-	if command == "multi" {
+	switch command {
+	case "multi":
 		return parseMulti(command, args)
+	case "exec":
+		return parseExec(command, args)
+	case "discard":
+		return parseDiscard(command, args)
 	}
 
-	if ctx.Connection.InsideTx && command != "exec" {
+	if ctx.Connection.InsideTx {
 		return &txQueue{Command: command, Args: args}, nil
 	}
 
@@ -51,8 +56,6 @@ func Parse(ctx *context.Request, command string, args []string) (Command, error)
 		return parseXread(command, args)
 	case "incr":
 		return parseIncr(command, args)
-	case "exec":
-		return parseExec(command, args)
 	default:
 		return nil, errors.UknownCommand(command)
 	}
