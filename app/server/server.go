@@ -132,6 +132,8 @@ func (s *Server) handle(msg *envelope) {
 		cmd, err = commands.ParseXrange(msg.ctx)
 	case "xread":
 		cmd, err = commands.ParseXread(msg.ctx)
+	case "incr":
+		cmd, err = commands.ParseIncr(msg.ctx)
 	default:
 		err = errors.UknownCommand(msg.ctx)
 	}
