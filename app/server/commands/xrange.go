@@ -2,8 +2,8 @@ package commands
 
 import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
+	"github.com/codecrafters-io/redis-starter-go/app/server/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/errors"
-	"github.com/codecrafters-io/redis-starter-go/app/server/request"
 	"github.com/codecrafters-io/redis-starter-go/app/server/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/store/streams"
 )
@@ -14,15 +14,15 @@ type xrange struct {
 	end   string
 }
 
-func ParseXrange(ctx *request.Context) (*xrange, error) {
-	if len(ctx.Args) != 3 {
-		return nil, errors.NumArgs(ctx)
+func parseXrange(command string, args []string) (*xrange, error) {
+	if len(args) != 3 {
+		return nil, errors.NumArgs(command)
 	}
 
-	return &xrange{key: ctx.Args[0], start: ctx.Args[1], end: ctx.Args[2]}, nil
+	return &xrange{key: args[0], start: args[1], end: args[2]}, nil
 }
 
-func (cmd *xrange) Exec(ctx *request.Context, s *store.Store) ([]byte, error) {
+func (cmd *xrange) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 	o, ok := s.Get(cmd.key)
 	if !ok {
 		o = store.Object{Value: streams.Stream{}}

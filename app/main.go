@@ -8,6 +8,7 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server"
+	"github.com/codecrafters-io/redis-starter-go/app/server/context"
 )
 
 func main() {
@@ -33,10 +34,15 @@ func main() {
 	}
 }
 
+// TODO: move this inside the server struct
+// might need to refactor the server struct a little
+// e.g: extract engine component (as an actor)
 func handleConnection(srv *server.Server, conn net.Conn) {
 	defer conn.Close()
 
 	reader := resp.NewReader(conn)
+
+	ctx := &context.Connection{}
 
 	for {
 		command, err := reader.ReadValue()
@@ -49,7 +55,7 @@ func handleConnection(srv *server.Server, conn net.Conn) {
 		}
 
 		// TODO: should tell srv.Do if client canceled or closed the connection, e.g: context.Context
-		if _, err := conn.Write(srv.Do(command)); err != nil {
+		if _, err := conn.Write(srv.Do(ctx, command)); err != nil {
 			fmt.Println("Error writing to connection: ", err.Error())
 			break
 		}

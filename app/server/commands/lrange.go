@@ -4,8 +4,8 @@ import (
 	"strconv"
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
+	"github.com/codecrafters-io/redis-starter-go/app/server/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/errors"
-	"github.com/codecrafters-io/redis-starter-go/app/server/request"
 	"github.com/codecrafters-io/redis-starter-go/app/server/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/store/lists"
 )
@@ -16,24 +16,24 @@ type lrange struct {
 	end   int
 }
 
-func ParseLrange(ctx *request.Context) (*lrange, error) {
-	if len(ctx.Args) != 3 {
-		return nil, errors.NumArgs(ctx)
+func parseLrange(command string, args []string) (*lrange, error) {
+	if len(args) != 3 {
+		return nil, errors.NumArgs(command)
 	}
 
-	start, err := strconv.Atoi(ctx.Args[1])
+	start, err := strconv.Atoi(args[1])
 	if err != nil {
 		return nil, errors.InvalidInteger
 	}
-	end, err := strconv.Atoi(ctx.Args[2])
+	end, err := strconv.Atoi(args[2])
 	if err != nil {
 		return nil, errors.InvalidInteger
 	}
 
-	return &lrange{key: ctx.Args[0], start: start, end: end}, nil
+	return &lrange{key: args[0], start: start, end: end}, nil
 }
 
-func (cmd *lrange) Exec(ctx *request.Context, s *store.Store) ([]byte, error) {
+func (cmd *lrange) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 	o, ok := s.Get(cmd.key)
 	if !ok {
 		return resp.Array(nil), nil

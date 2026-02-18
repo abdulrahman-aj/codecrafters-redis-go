@@ -7,16 +7,22 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/server/store"
 )
 
-type ping struct{}
+type multi struct{}
 
-func parsePing(command string, args []string) (*ping, error) {
+func parseMulti(command string, args []string) (*multi, error) {
 	if len(args) != 0 {
 		return nil, errors.NumArgs(command)
 	}
 
-	return &ping{}, nil
+	return &multi{}, nil
 }
 
-func (cmd *ping) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
-	return resp.SimpleString("PONG"), nil
+func (cmd *multi) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
+	if ctx.Connection.InsideTx {
+		return nil, errors.NestedTransaction
+	}
+
+	ctx.Connection.InsideTx = true
+
+	return resp.SimpleString("OK"), nil
 }

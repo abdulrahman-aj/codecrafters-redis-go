@@ -2,8 +2,8 @@ package commands
 
 import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
+	"github.com/codecrafters-io/redis-starter-go/app/server/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/errors"
-	"github.com/codecrafters-io/redis-starter-go/app/server/request"
 	"github.com/codecrafters-io/redis-starter-go/app/server/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/store/lists"
 	"github.com/codecrafters-io/redis-starter-go/app/server/store/streams"
@@ -13,15 +13,15 @@ type typeCmd struct {
 	key string
 }
 
-func ParseType(ctx *request.Context) (*typeCmd, error) {
-	if len(ctx.Args) != 1 {
-		return nil, errors.NumArgs(ctx)
+func parseType(command string, args []string) (*typeCmd, error) {
+	if len(args) != 1 {
+		return nil, errors.NumArgs(command)
 	}
 
-	return &typeCmd{key: ctx.Args[0]}, nil
+	return &typeCmd{key: args[0]}, nil
 }
 
-func (cmd *typeCmd) Exec(ctx *request.Context, s *store.Store) ([]byte, error) {
+func (cmd *typeCmd) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 	o, ok := s.Get(cmd.key)
 	if !ok {
 		return resp.SimpleString("none"), nil

@@ -1,10 +1,70 @@
 package commands
 
 import (
-	"github.com/codecrafters-io/redis-starter-go/app/server/request"
+	"github.com/codecrafters-io/redis-starter-go/app/resp"
+	"github.com/codecrafters-io/redis-starter-go/app/server/context"
+	"github.com/codecrafters-io/redis-starter-go/app/server/errors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/store"
 )
 
 type Command interface {
-	Exec(ctx *request.Context, s *store.Store) ([]byte, error)
+	Exec(ctx *context.Request, s *store.Store) ([]byte, error)
+}
+
+func Parse(ctx *context.Request, command string, args []string) (Command, error) {
+	if command == "multi" {
+		return parseMulti(command, args)
+	}
+
+	if ctx.Connection.InsideTx && command != "exec" {
+		return &txQueue{Command: command, Args: args}, nil
+	}
+
+	switch command {
+	case "ping":
+		return parsePing(command, args)
+	case "echo":
+		return parseEcho(command, args)
+	case "set":
+		return parseSet(command, args)
+	case "get":
+		return parseGet(command, args)
+	case "rpush":
+		return parseRpush(command, args)
+	case "lpush":
+		return parseLpush(command, args)
+	case "lrange":
+		return parseLrange(command, args)
+	case "llen":
+		return parseLlen(command, args)
+	case "lpop":
+		return parseLpop(command, args)
+	case "blpop":
+		return parseBlpop(command, args)
+	case "type":
+		return parseType(command, args)
+	case "xadd":
+		return parseXadd(command, args)
+	case "xrange":
+		return parseXrange(command, args)
+	case "xread":
+		return parseXread(command, args)
+	case "incr":
+		return parseIncr(command, args)
+	case "exec":
+		return parseExec(command, args)
+	default:
+		return nil, errors.UknownCommand(command)
+	}
+}
+
+type txQueue struct {
+	Command string
+	Args    []string
+}
+
+func (cmd *txQueue) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
+	txCommand := context.TxCommand{Command: cmd.Command, Args: cmd.Args}
+	ctx.Connection.TxCommands = append(ctx.Connection.TxCommands, txCommand)
+	return resp.SimpleString("QUEUED"), nil
 }

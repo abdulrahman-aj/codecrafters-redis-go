@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
+	"github.com/codecrafters-io/redis-starter-go/app/server/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/errors"
-	"github.com/codecrafters-io/redis-starter-go/app/server/request"
 	"github.com/codecrafters-io/redis-starter-go/app/server/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/store/streams"
 )
@@ -16,13 +16,12 @@ type xread struct {
 	keys       []string
 	ids        []string
 	isBlocking bool
+	timeout    time.Duration
 }
 
-func ParseXread(ctx *request.Context) (*xread, error) {
-	args := ctx.Args
-
+func parseXread(command string, args []string) (*xread, error) {
 	if len(args) < 3 {
-		return nil, errors.NumArgs(ctx)
+		return nil, errors.NumArgs(command)
 	}
 
 	cmd := &xread{isBlocking: strings.EqualFold(args[0], "block")}
@@ -38,14 +37,14 @@ func ParseXread(ctx *request.Context) (*xread, error) {
 		}
 
 		if timeoutMs != 0 {
-			ctx.SetTimeout(time.Duration(timeoutMs) * time.Millisecond)
+			cmd.timeout = time.Duration(timeoutMs) * time.Millisecond
 		}
 
 		args = args[2:]
 	}
 
 	if len(args) < 3 { // STREAMS k id
-		return nil, errors.NumArgs(ctx)
+		return nil, errors.NumArgs(command)
 	}
 
 	if !strings.EqualFold(args[0], "streams") {
@@ -62,16 +61,16 @@ func ParseXread(ctx *request.Context) (*xread, error) {
 	cmd.keys = keysAndIDs[:numKeys]
 	cmd.ids = keysAndIDs[numKeys:]
 
-	for _, key := range cmd.keys {
-		ctx.Dependencies[key] = true
-	}
-
 	return cmd, nil
 }
 
-func (cmd *xread) Exec(ctx *request.Context, s *store.Store) ([]byte, error) {
-	if ctx.IsExpired() {
-		return resp.NullArray, nil
+func (cmd *xread) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
+	if cmd.timeout != 0 {
+		ctx.SetTimeout(cmd.timeout)
+	}
+
+	for _, key := range cmd.keys {
+		ctx.Dependencies[key] = true
 	}
 
 	var ret []any
@@ -113,6 +112,10 @@ func (cmd *xread) Exec(ctx *request.Context, s *store.Store) ([]byte, error) {
 	}
 
 	if cmd.isBlocking && len(ret) == 0 {
+		if ctx.DeadlineExceeded() {
+			return resp.NullArray, nil
+		}
+
 		return nil, errors.Blocked
 	}
 

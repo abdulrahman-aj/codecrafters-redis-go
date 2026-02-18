@@ -4,8 +4,8 @@ import (
 	"slices"
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
+	"github.com/codecrafters-io/redis-starter-go/app/server/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/errors"
-	"github.com/codecrafters-io/redis-starter-go/app/server/request"
 	"github.com/codecrafters-io/redis-starter-go/app/server/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/store/lists"
 )
@@ -15,15 +15,15 @@ type lpush struct {
 	values []string
 }
 
-func ParseLpush(ctx *request.Context) (*lpush, error) {
-	if len(ctx.Args) < 2 {
-		return nil, errors.NumArgs(ctx)
+func parseLpush(command string, args []string) (*lpush, error) {
+	if len(args) < 2 {
+		return nil, errors.NumArgs(command)
 	}
 
-	return &lpush{key: ctx.Args[0], values: ctx.Args[1:]}, nil
+	return &lpush{key: args[0], values: args[1:]}, nil
 }
 
-func (cmd *lpush) Exec(ctx *request.Context, s *store.Store) ([]byte, error) {
+func (cmd *lpush) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 	o, ok := s.Get(cmd.key)
 	if !ok {
 		o = store.Object{Value: lists.List{}}

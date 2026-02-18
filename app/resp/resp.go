@@ -138,6 +138,8 @@ func Array(arr any) []byte {
 				ret = append(ret, BulkString(x)...)
 			case []any:
 				ret = append(ret, Array(x)...)
+			case []byte: // already serialized
+				ret = append(ret, x...)
 			default:
 				panic("TODO: not implemented")
 			}

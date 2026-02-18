@@ -2,8 +2,8 @@ package commands
 
 import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
+	"github.com/codecrafters-io/redis-starter-go/app/server/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/errors"
-	"github.com/codecrafters-io/redis-starter-go/app/server/request"
 	"github.com/codecrafters-io/redis-starter-go/app/server/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/store/streams"
 )
@@ -14,25 +14,25 @@ type xadd struct {
 	kvs     []string
 }
 
-func ParseXadd(ctx *request.Context) (*xadd, error) {
-	if len(ctx.Args) < 4 {
-		return nil, errors.NumArgs(ctx)
+func parseXadd(command string, args []string) (*xadd, error) {
+	if len(args) < 4 {
+		return nil, errors.NumArgs(command)
 	}
 
 	var (
-		key     = ctx.Args[0]
-		entryID = ctx.Args[1]
-		kvs     = ctx.Args[2:]
+		key     = args[0]
+		entryID = args[1]
+		kvs     = args[2:]
 	)
 
 	if len(kvs)%2 != 0 {
-		return nil, errors.NumArgs(ctx)
+		return nil, errors.NumArgs(command)
 	}
 
 	return &xadd{key: key, entryID: entryID, kvs: kvs}, nil
 }
 
-func (cmd *xadd) Exec(ctx *request.Context, s *store.Store) ([]byte, error) {
+func (cmd *xadd) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 	o, ok := s.Get(cmd.key)
 	if !ok {
 		o = store.Object{Value: streams.Stream{}}

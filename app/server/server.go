@@ -8,8 +8,8 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/containers"
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/commands"
+	"github.com/codecrafters-io/redis-starter-go/app/server/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/errors"
-	"github.com/codecrafters-io/redis-starter-go/app/server/request"
 	"github.com/codecrafters-io/redis-starter-go/app/server/store"
 )
 
@@ -28,7 +28,9 @@ type Server struct {
 }
 
 type envelope struct {
-	ctx        *request.Context
+	ctx        *context.Request
+	command    string
+	args       []string
 	responseCh chan<- []byte
 }
 
@@ -74,20 +76,21 @@ func (s *Server) Run() {
 	}
 }
 
-func (s *Server) Do(c any) []byte {
+func (s *Server) Do(connectionCtx *context.Connection, c any) []byte {
 	command, args, ok := parseCommand(c)
 	if !ok {
-		return resp.SimpleError("command should be an array of bulk strings.")
+		return resp.SimpleError("command should be an array of bulk strings.") // TODO: check the proper redis error returned here
 	}
 
 	ch := make(chan []byte)
 
 	s.inbox <- &envelope{
 		responseCh: ch,
-		ctx: &request.Context{
+		command:    command,
+		args:       args,
+		ctx: &context.Request{
+			Connection:   connectionCtx,
 			RequestID:    s.lastID.Add(1),
-			Command:      command,
-			Args:         args,
 			RequestedAt:  time.Now(),
 			Dependencies: map[string]bool{},
 			TouchedKeys:  map[string]bool{},
@@ -97,48 +100,9 @@ func (s *Server) Do(c any) []byte {
 	return <-ch
 }
 
+// TODO: consider adding --verbose logging
 func (s *Server) handle(msg *envelope) {
-	var (
-		cmd commands.Command
-		err error
-	)
-
-	switch msg.ctx.Command {
-	case "ping":
-		cmd, err = commands.ParsePing(msg.ctx)
-	case "echo":
-		cmd, err = commands.ParseEcho(msg.ctx)
-	case "set":
-		cmd, err = commands.ParseSet(msg.ctx)
-	case "get":
-		cmd, err = commands.ParseGet(msg.ctx)
-	case "rpush":
-		cmd, err = commands.ParseRpush(msg.ctx)
-	case "lpush":
-		cmd, err = commands.ParseLpush(msg.ctx)
-	case "lrange":
-		cmd, err = commands.ParseLrange(msg.ctx)
-	case "llen":
-		cmd, err = commands.ParseLlen(msg.ctx)
-	case "lpop":
-		cmd, err = commands.ParseLpop(msg.ctx)
-	case "blpop":
-		cmd, err = commands.ParseBlpop(msg.ctx)
-	case "type":
-		cmd, err = commands.ParseType(msg.ctx)
-	case "xadd":
-		cmd, err = commands.ParseXadd(msg.ctx)
-	case "xrange":
-		cmd, err = commands.ParseXrange(msg.ctx)
-	case "xread":
-		cmd, err = commands.ParseXread(msg.ctx)
-	case "incr":
-		cmd, err = commands.ParseIncr(msg.ctx)
-	default:
-		err = errors.UknownCommand(msg.ctx)
-	}
-
-	// TODO: consider adding --verbose logging
+	cmd, err := commands.Parse(msg.ctx, msg.command, msg.args)
 	if err != nil {
 		s.handleErr(msg, err)
 		return
@@ -161,11 +125,11 @@ func (s *Server) handleErr(msg *envelope, err error) {
 	} else if errors.Is(err, errors.Blocked) {
 		s.waitQueue.enqueue(msg)
 	} else {
-		panic(clientError)
+		panic(err)
 	}
 }
 
-func (s *Server) wakeWaiters(ctx *request.Context) {
+func (s *Server) wakeWaiters(ctx *context.Request) {
 	for key := range ctx.TouchedKeys {
 		for _, msg := range s.waitQueue.dequeueWaiters(key) {
 			s.readyQueue.Enqueue(msg)

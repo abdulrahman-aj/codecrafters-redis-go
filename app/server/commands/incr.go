@@ -4,8 +4,8 @@ import (
 	"strconv"
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
+	"github.com/codecrafters-io/redis-starter-go/app/server/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/errors"
-	"github.com/codecrafters-io/redis-starter-go/app/server/request"
 	"github.com/codecrafters-io/redis-starter-go/app/server/store"
 )
 
@@ -13,15 +13,15 @@ type incr struct {
 	key string
 }
 
-func ParseIncr(ctx *request.Context) (*incr, error) {
-	if len(ctx.Args) != 1 {
-		return nil, errors.NumArgs(ctx)
+func parseIncr(command string, args []string) (*incr, error) {
+	if len(args) != 1 {
+		return nil, errors.NumArgs(command)
 	}
 
-	return &incr{key: ctx.Args[0]}, nil
+	return &incr{key: args[0]}, nil
 }
 
-func (cmd *incr) Exec(ctx *request.Context, s *store.Store) ([]byte, error) {
+func (cmd *incr) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 	o, ok := s.Get(cmd.key)
 	if !ok {
 		o = store.Object{Value: "0"}

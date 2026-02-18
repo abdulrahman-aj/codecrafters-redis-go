@@ -2,8 +2,8 @@ package commands
 
 import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
+	"github.com/codecrafters-io/redis-starter-go/app/server/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/errors"
-	"github.com/codecrafters-io/redis-starter-go/app/server/request"
 	"github.com/codecrafters-io/redis-starter-go/app/server/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/store/lists"
 )
@@ -13,15 +13,15 @@ type rpush struct {
 	values []string
 }
 
-func ParseRpush(ctx *request.Context) (*rpush, error) {
-	if len(ctx.Args) < 2 {
-		return nil, errors.NumArgs(ctx)
+func parseRpush(command string, args []string) (*rpush, error) {
+	if len(args) < 2 {
+		return nil, errors.NumArgs(command)
 	}
 
-	return &rpush{key: ctx.Args[0], values: ctx.Args[1:]}, nil
+	return &rpush{key: args[0], values: args[1:]}, nil
 }
 
-func (cmd *rpush) Exec(ctx *request.Context, s *store.Store) ([]byte, error) {
+func (cmd *rpush) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 	o, ok := s.Get(cmd.key)
 	if !ok {
 		o = store.Object{Value: lists.List{}}
