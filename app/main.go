@@ -46,12 +46,13 @@ func handleConnection(srv *server.Server, conn net.Conn) {
 
 	for {
 		command, err := reader.ReadValue()
-		if err == io.EOF {
-			break
-		}
 		if err != nil {
+			if err == io.EOF {
+				break
+			}
+
 			fmt.Println("Error reading from connection: ", err.Error())
-			return
+			return // TODO: should tell the server to cancel any blocking operations related to this connection
 		}
 
 		// TODO: should tell srv.Do if client canceled or closed the connection, e.g: context.Context
