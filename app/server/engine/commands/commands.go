@@ -60,6 +60,8 @@ func Parse(ctx *types.RequestCtx, command string, args []string) (Command, []byt
 		return parseIncr(command, args)
 	case "info":
 		return parseInfo(command, args)
+	case "replconf":
+		return parseReplConf(command, args)
 	default:
 		return nil, rediserrors.UknownCommand(command)
 	}
