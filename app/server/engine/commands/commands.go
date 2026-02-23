@@ -58,6 +58,8 @@ func Parse(ctx *context.Request, command string, args []string) (Command, []byte
 		return parseXread(command, args)
 	case "incr":
 		return parseIncr(command, args)
+	case "info":
+		return parseInfo(command, args)
 	default:
 		return nil, rediserrors.UknownCommand(command)
 	}
