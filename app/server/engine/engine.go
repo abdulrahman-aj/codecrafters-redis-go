@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -25,8 +26,9 @@ type Engine struct {
 	info       *types.Info
 }
 
-func New(replicaOf string) *Engine {
+func New(port int, replicaOf string) *Engine {
 	info := &types.Info{
+		Port:                port,
 		Role:                "master",
 		MasterReplicationID: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
 	}
@@ -68,7 +70,7 @@ func (e *envelope) before(other *envelope) bool {
 
 func (e *Engine) Run() {
 	if e.info.MasterIP != "" {
-		util.Assert(e.connectToMaster() == nil, "TODO: handle connect to master error")
+		util.FatalOnErr(e.connectToMaster()) // TODO: handle connect to master error
 	}
 
 	nextTimeout := time.NewTimer(0)
@@ -177,8 +179,25 @@ func (e *Engine) connectToMaster() error {
 		return err
 	}
 
-	ping := resp.Array([]string{"PING"})
-	if _, err := conn.Write(ping); err != nil {
+	reader := resp.NewReader(conn)
+	send := func(bytes []byte) error { // ignoring responses for now
+		if _, err := conn.Write(bytes); err != nil {
+			return err
+		}
+
+		_, err := reader.ReadValue()
+		return err
+	}
+
+	if err := send(resp.Array([]string{"PING"})); err != nil {
+		return err
+	}
+
+	if err := send(resp.Array([]string{"REPLCONF", "listening-port", strconv.Itoa(e.info.Port)})); err != nil {
+		return err
+	}
+
+	if err := send(resp.Array([]string{"REPLCONF", "capa", "psync2"})); err != nil {
 		return err
 	}
 

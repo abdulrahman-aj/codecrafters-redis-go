@@ -30,6 +30,8 @@ func (r *Reader) ReadValue() (any, error) {
 		return r.readArray()
 	case '$':
 		return r.readBulkString()
+	case '+':
+		return r.readSimpleString()
 	default:
 		return nil, ErrBadRequest
 	}
@@ -67,6 +69,15 @@ func (r *Reader) readBulkString() (string, error) {
 
 	if len(bytes) != strLength {
 		return "", fmt.Errorf("%w: length mismatch: header=%d, actual=%d for string %s", ErrBadRequest, strLength, len(bytes), bytes)
+	}
+
+	return string(bytes), nil
+}
+
+func (r *Reader) readSimpleString() (string, error) {
+	bytes, err := readline(r.reader)
+	if err != nil {
+		return "", err
 	}
 
 	return string(bytes), nil

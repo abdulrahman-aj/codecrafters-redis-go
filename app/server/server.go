@@ -23,7 +23,7 @@ func New(ip string, port int, replicaOf string) (*Server, error) {
 
 	return &Server{
 		listener: listener,
-		engine:   engine.New(replicaOf),
+		engine:   engine.New(port, replicaOf),
 	}, nil
 }
 

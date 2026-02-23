@@ -40,6 +40,7 @@ type TxCommand struct {
 }
 
 type Info struct {
+	Port                    int
 	Role                    string
 	MasterReplicationID     string
 	MasterReplicationOffset int
