@@ -2,6 +2,8 @@ package engine
 
 import (
 	"errors"
+	"fmt"
+	"net"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -28,8 +30,15 @@ func New(replicaOf string) *Engine {
 		Role:                "master",
 		MasterReplicationID: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
 	}
+
 	if replicaOf != "" {
 		info.Role = "slave"
+
+		parts := strings.Split(replicaOf, " ")
+		util.Assert(len(parts) == 2, `replica address in the format "<MASTER_HOST> <MASTER_PORT>"`)
+
+		info.MasterIP = parts[0]
+		info.MasterPort = parts[1]
 	}
 
 	return &Engine{
@@ -58,6 +67,10 @@ func (e *envelope) before(other *envelope) bool {
 }
 
 func (e *Engine) Run() {
+	if e.info.MasterIP != "" {
+		util.Assert(e.connectToMaster() == nil, "TODO: handle connect to master error")
+	}
+
 	nextTimeout := time.NewTimer(0)
 
 	for {
@@ -156,4 +169,18 @@ func parseCommand(v any) (string, []string, bool) {
 	}
 
 	return strings.ToLower(ret[0]), ret[1:], true
+}
+
+func (e *Engine) connectToMaster() error {
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%s", e.info.MasterIP, e.info.MasterPort))
+	if err != nil {
+		return err
+	}
+
+	ping := resp.Array([]string{"PING"})
+	if _, err := conn.Write(ping); err != nil {
+		return err
+	}
+
+	return nil
 }

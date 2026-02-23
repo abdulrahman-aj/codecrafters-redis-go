@@ -43,4 +43,6 @@ type Info struct {
 	Role                    string
 	MasterReplicationID     string
 	MasterReplicationOffset int
+	MasterIP                string
+	MasterPort              string
 }
