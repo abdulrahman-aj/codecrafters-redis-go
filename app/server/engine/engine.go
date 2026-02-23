@@ -189,15 +189,19 @@ func (e *Engine) connectToMaster() error {
 		return err
 	}
 
-	if err := send(resp.Array([]string{"PING"})); err != nil {
+	if err := send(resp.Array([]string{"PING"})); err != nil { // TODO: expect OK
 		return err
 	}
 
-	if err := send(resp.Array([]string{"REPLCONF", "listening-port", strconv.Itoa(e.info.Port)})); err != nil {
+	if err := send(resp.Array([]string{"REPLCONF", "listening-port", strconv.Itoa(e.info.Port)})); err != nil { // TODO: expect OK
 		return err
 	}
 
-	if err := send(resp.Array([]string{"REPLCONF", "capa", "psync2"})); err != nil {
+	if err := send(resp.Array([]string{"REPLCONF", "capa", "psync2"})); err != nil { // TODO: expect OK
+		return err
+	}
+
+	if err := send(resp.Array([]string{"PSYNC", "?", "-1"})); err != nil { // TODO: expect FULLRESYNC...
 		return err
 	}
 
