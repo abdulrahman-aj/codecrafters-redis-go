@@ -3,6 +3,7 @@ package commands
 import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/errors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/streams"
@@ -35,7 +36,10 @@ func (cmd *xrange) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 
 	entries, err := stream.Between(cmd.start, cmd.end)
 	if err != nil {
-		return err, nil // TODO: revisit and do proper error handling here
+		if errors.Is(err, streams.ErrInvalidID) {
+			return rediserrors.InvalidStreamID, nil
+		}
+		return nil, err
 	}
 
 	ret := []any{}

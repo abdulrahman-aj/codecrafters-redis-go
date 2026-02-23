@@ -3,6 +3,7 @@ package commands
 import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/errors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/streams"
@@ -53,7 +54,16 @@ func (cmd *xadd) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 
 	id, err := stream.Append(cmd.entryID, fields, ctx.RequestedAt)
 	if err != nil {
-		return err, nil // TODO: revisit this and do proper error mapping
+		switch {
+		case errors.Is(err, streams.ErrInvalidID):
+			return rediserrors.InvalidStreamID, nil
+		case errors.Is(err, streams.ErrNotIncreasing):
+			return rediserrors.XaddEqualOrSmaller, nil
+		case errors.Is(err, streams.ErrZeroID):
+			return rediserrors.XaddZeroID, nil
+		default:
+			return nil, err
+		}
 	}
 
 	o.Value = stream

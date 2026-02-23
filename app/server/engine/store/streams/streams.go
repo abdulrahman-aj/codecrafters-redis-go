@@ -1,14 +1,13 @@
 package streams
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/codecrafters-io/redis-starter-go/app/resp"
 )
 
 type Stream struct {
@@ -42,7 +41,7 @@ type Field struct {
 	Value string
 }
 
-func (s *Stream) Append(entryID string, fields []Field, createdAt time.Time) (string, []byte) {
+func (s *Stream) Append(entryID string, fields []Field, createdAt time.Time) (string, error) {
 	ms, seq, err := s.generateID(entryID)
 	if err != nil {
 		return "", err
@@ -54,7 +53,7 @@ func (s *Stream) Append(entryID string, fields []Field, createdAt time.Time) (st
 	return e.ID(), nil
 }
 
-func (s *Stream) Between(start, end string) ([]Entry, []byte) {
+func (s *Stream) Between(start, end string) ([]Entry, error) {
 	var (
 		startMs, startSeq int
 		endMs, endSeq     int
@@ -70,7 +69,7 @@ func (s *Stream) Between(start, end string) ([]Entry, []byte) {
 	}
 
 	if err != nil {
-		return nil, errInvalidStreamID
+		return nil, ErrInvalidID
 	}
 
 	if end == "+" {
@@ -83,7 +82,7 @@ func (s *Stream) Between(start, end string) ([]Entry, []byte) {
 	}
 
 	if err != nil {
-		return nil, errInvalidStreamID
+		return nil, ErrInvalidID
 	}
 
 	lb := s.lowerBound(startMs, startSeq)
@@ -103,10 +102,10 @@ func (s *Stream) AfterTime(t time.Time) []Entry {
 	return s.entries[i:]
 }
 
-func (s *Stream) After(start string) ([]Entry, []byte) {
+func (s *Stream) After(start string) ([]Entry, error) {
 	ms, seq, err := parseID(start)
 	if err != nil {
-		return nil, errInvalidStreamID
+		return nil, ErrInvalidID
 	}
 
 	ub := s.upperBound(ms, seq)
@@ -129,7 +128,7 @@ func (s *Stream) upperBound(ms, seq int) int {
 
 func (s *Stream) Len() int { return len(s.entries) }
 
-func (s *Stream) generateID(entryID string) (int, int, []byte) {
+func (s *Stream) generateID(entryID string) (int, int, error) {
 	switch {
 	case entryID == "*":
 		return s.generateFullID()
@@ -138,7 +137,7 @@ func (s *Stream) generateID(entryID string) (int, int, []byte) {
 
 		ms, err := strconv.Atoi(msStr)
 		if err != nil || ms < 0 {
-			return 0, 0, errInvalidStreamID
+			return 0, 0, ErrInvalidID
 		}
 
 		return s.generatePartialID(ms)
@@ -147,11 +146,11 @@ func (s *Stream) generateID(entryID string) (int, int, []byte) {
 	}
 }
 
-func (s *Stream) generateFullID() (int, int, []byte) {
+func (s *Stream) generateFullID() (int, int, error) {
 	return s.generatePartialID(int(time.Now().UnixMilli()))
 }
 
-func (s *Stream) generatePartialID(ms int) (int, int, []byte) {
+func (s *Stream) generatePartialID(ms int) (int, int, error) {
 	if len(s.entries) == 0 {
 		if ms == 0 {
 			return 0, 1, nil
@@ -163,7 +162,7 @@ func (s *Stream) generatePartialID(ms int) (int, int, []byte) {
 
 	switch {
 	case last.Ms > ms:
-		return 0, 0, errXaddEqualOrSmaller
+		return 0, 0, ErrNotIncreasing
 	case last.Ms == ms:
 		return ms, last.Seq + 1, nil
 	default: // last.Ms < ms:
@@ -171,14 +170,14 @@ func (s *Stream) generatePartialID(ms int) (int, int, []byte) {
 	}
 }
 
-func (s Stream) validateID(entryID string) (int, int, []byte) {
+func (s Stream) validateID(entryID string) (int, int, error) {
 	ms, seq, err := parseID(entryID)
 	if err != nil || ms < 0 || seq < 0 {
-		return 0, 0, errInvalidStreamID
+		return 0, 0, ErrInvalidID
 	}
 
 	if ms == 0 && seq == 0 {
-		return 0, 0, errXaddZeroID
+		return 0, 0, ErrZeroID
 	}
 
 	if len(s.entries) == 0 {
@@ -186,7 +185,7 @@ func (s Stream) validateID(entryID string) (int, int, []byte) {
 	}
 
 	if last := s.entries[len(s.entries)-1]; ms < last.Ms || ms == last.Ms && seq <= last.Seq {
-		return 0, 0, errXaddEqualOrSmaller
+		return 0, 0, ErrNotIncreasing
 	}
 
 	return ms, seq, nil
@@ -199,7 +198,7 @@ func parseID(entryID string) (int, int, error) {
 }
 
 var (
-	errInvalidStreamID    = resp.SimpleError("ERR Invalid stream ID specified as stream command argument")
-	errXaddEqualOrSmaller = resp.SimpleError("ERR The ID specified in XADD is equal or smaller than the target stream top item")
-	errXaddZeroID         = resp.SimpleError("ERR The ID specified in XADD must be greater than 0-0")
+	ErrInvalidID     = errors.New("invalid stream ID")
+	ErrNotIncreasing = errors.New("stream ID smaller or equal than ID of latest stream entry")
+	ErrZeroID        = errors.New("stream ID should not be 0-0")
 )

@@ -26,4 +26,7 @@ var (
 	NestedTransaction   = resp.SimpleError("ERR MULTI calls can not be nested")
 	ExecWithoutMulti    = resp.SimpleError("ERR EXEC without MULTI")
 	DiscardWithoutMulti = resp.SimpleError("ERR DISCARD without MULTI")
+	InvalidStreamID     = resp.SimpleError("ERR Invalid stream ID specified as stream command argument")
+	XaddEqualOrSmaller  = resp.SimpleError("ERR The ID specified in XADD is equal or smaller than the target stream top item")
+	XaddZeroID          = resp.SimpleError("ERR The ID specified in XADD must be greater than 0-0")
 )

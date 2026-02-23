@@ -90,7 +90,7 @@ func (cmd *xread) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 
 		var (
 			entries []streams.Entry
-			err     []byte
+			err     error
 		)
 
 		if id == "$" {
@@ -100,7 +100,10 @@ func (cmd *xread) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 		}
 
 		if err != nil {
-			return err, nil // TODO: revisit and do proper error handling here
+			if errors.Is(err, streams.ErrInvalidID) {
+				return rediserrors.InvalidStreamID, nil
+			}
+			return nil, err
 		}
 
 		if len(entries) != 0 {
