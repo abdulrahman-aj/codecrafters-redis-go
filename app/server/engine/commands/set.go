@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/types"
 )
 
 type set struct {
@@ -43,7 +43,7 @@ func parseSet(command string, args []string) (*set, []byte) {
 	return &set{key: args[0], value: args[1], expiresAt: expiresAt}, nil
 }
 
-func (cmd *set) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
+func (cmd *set) Exec(ctx *types.RequestCtx, s *store.Store) ([]byte, error) {
 	o := store.Object{Value: cmd.value, ExpiresAt: cmd.expiresAt}
 	s.Set(ctx, cmd.key, o)
 	return resp.SimpleString("OK"), nil

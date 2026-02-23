@@ -2,10 +2,10 @@ package commands
 
 import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/lists"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/types"
 )
 
 type llen struct {
@@ -20,7 +20,7 @@ func parseLlen(command string, args []string) (*llen, []byte) {
 	return &llen{key: args[0]}, nil
 }
 
-func (cmd *llen) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
+func (cmd *llen) Exec(ctx *types.RequestCtx, s *store.Store) ([]byte, error) {
 	o, ok := s.Get(cmd.key)
 	if !ok {
 		return resp.Integer(0), nil

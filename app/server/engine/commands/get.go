@@ -2,9 +2,9 @@ package commands
 
 import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/types"
 )
 
 type get struct {
@@ -19,7 +19,7 @@ func parseGet(command string, args []string) (*get, []byte) {
 	return &get{key: args[0]}, nil
 }
 
-func (cmd *get) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
+func (cmd *get) Exec(ctx *types.RequestCtx, s *store.Store) ([]byte, error) {
 	o, ok := s.Get(cmd.key)
 	if !ok {
 		return resp.NullBulkString, nil

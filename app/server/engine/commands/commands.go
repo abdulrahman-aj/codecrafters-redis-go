@@ -4,16 +4,16 @@ import (
 	"errors"
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/types"
 )
 
 type Command interface {
-	Exec(ctx *context.Request, s *store.Store) ([]byte, error)
+	Exec(ctx *types.RequestCtx, s *store.Store) ([]byte, error)
 }
 
-func Parse(ctx *context.Request, command string, args []string) (Command, []byte) {
+func Parse(ctx *types.RequestCtx, command string, args []string) (Command, []byte) {
 	switch command {
 	case "multi":
 		return parseMulti(command, args)
@@ -23,7 +23,7 @@ func Parse(ctx *context.Request, command string, args []string) (Command, []byte
 		return parseDiscard(command, args)
 	}
 
-	if ctx.Connection.InsideTx {
+	if ctx.Conn.InsideTx {
 		return &txQueue{Command: command, Args: args}, nil
 	}
 
@@ -70,9 +70,9 @@ type txQueue struct {
 	Args    []string
 }
 
-func (cmd *txQueue) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
-	txCommand := context.TxCommand{Command: cmd.Command, Args: cmd.Args}
-	ctx.Connection.TxCommands = append(ctx.Connection.TxCommands, txCommand)
+func (cmd *txQueue) Exec(ctx *types.RequestCtx, s *store.Store) ([]byte, error) {
+	txCommand := types.TxCommand{Command: cmd.Command, Args: cmd.Args}
+	ctx.Conn.TxCommands = append(ctx.Conn.TxCommands, txCommand)
 	return resp.SimpleString("QUEUED"), nil
 }
 

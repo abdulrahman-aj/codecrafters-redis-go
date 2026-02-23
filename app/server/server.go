@@ -7,7 +7,7 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/types"
 )
 
 type Server struct {
@@ -44,7 +44,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 	reader := resp.NewReader(conn)
 
-	ctx := &context.Connection{}
+	ctx := &types.ConnectionCtx{}
 
 	for {
 		command, err := reader.ReadValue()

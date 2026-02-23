@@ -2,8 +2,8 @@ package types
 
 import "time"
 
-type Request struct {
-	Connection   *Connection
+type RequestCtx struct {
+	Conn         *ConnectionCtx
 	RequestID    int64
 	RequestedAt  time.Time
 	Deadline     time.Time
@@ -12,24 +12,24 @@ type Request struct {
 	Info         map[string]string
 }
 
-func (ctx *Request) SetTimeout(d time.Duration) {
+func (ctx *RequestCtx) SetTimeout(d time.Duration) {
 	deadline := ctx.RequestedAt.Add(d)
 	if ctx.Deadline.IsZero() || deadline.Before(ctx.Deadline) {
 		ctx.Deadline = deadline
 	}
 }
 
-func (ctx *Request) DeadlineExceeded() bool {
-	if ctx.Connection.InsideTx {
+func (ctx *RequestCtx) DeadlineExceeded() bool {
+	if ctx.Conn.InsideTx {
 		return true
 	}
 
 	return !ctx.Deadline.IsZero() && time.Now().After(ctx.Deadline)
 }
 
-func (ctx *Request) HasDeadline() bool { return !ctx.Deadline.IsZero() }
+func (ctx *RequestCtx) HasDeadline() bool { return !ctx.Deadline.IsZero() }
 
-type Connection struct {
+type ConnectionCtx struct {
 	InsideTx   bool
 	TxCommands []TxCommand
 }

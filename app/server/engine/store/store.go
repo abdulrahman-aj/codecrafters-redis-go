@@ -3,9 +3,9 @@ package store
 import (
 	"time"
 
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/lists"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/streams"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/types"
 )
 
 type Store struct {
@@ -30,7 +30,7 @@ func (s *Store) Get(key string) (Object, bool) {
 	return o, true
 }
 
-func (s *Store) Set(ctx *context.Request, key string, o Object) {
+func (s *Store) Set(ctx *types.RequestCtx, key string, o Object) {
 	ctx.TouchedKeys[key] = true
 
 	switch v := o.Value.(type) {

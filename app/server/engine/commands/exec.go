@@ -4,9 +4,9 @@ import (
 	"errors"
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/types"
 	"github.com/codecrafters-io/redis-starter-go/app/util"
 )
 
@@ -20,15 +20,15 @@ func parseExec(command string, args []string) (*exec, []byte) {
 	return &exec{}, nil
 }
 
-func (cmd *exec) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
-	if !ctx.Connection.InsideTx {
+func (cmd *exec) Exec(ctx *types.RequestCtx, s *store.Store) ([]byte, error) {
+	if !ctx.Conn.InsideTx {
 		return rediserrors.ExecWithoutMulti, nil
 	}
 
-	txCommands := ctx.Connection.TxCommands
+	txCommands := ctx.Conn.TxCommands
 
-	ctx.Connection.InsideTx = false
-	ctx.Connection.TxCommands = nil
+	ctx.Conn.InsideTx = false
+	ctx.Conn.TxCommands = nil
 
 	var ret []any
 

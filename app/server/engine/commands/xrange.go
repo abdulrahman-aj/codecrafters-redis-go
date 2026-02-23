@@ -4,10 +4,10 @@ import (
 	"errors"
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/streams"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/types"
 )
 
 type xrange struct {
@@ -24,7 +24,7 @@ func parseXrange(command string, args []string) (*xrange, []byte) {
 	return &xrange{key: args[0], start: args[1], end: args[2]}, nil
 }
 
-func (cmd *xrange) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
+func (cmd *xrange) Exec(ctx *types.RequestCtx, s *store.Store) ([]byte, error) {
 	o, ok := s.Get(cmd.key)
 	if !ok {
 		o = store.Object{Value: streams.Stream{}}

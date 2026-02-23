@@ -5,10 +5,10 @@ import (
 	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/lists"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/types"
 )
 
 type blpop struct {
@@ -34,7 +34,7 @@ func parseBlpop(command string, args []string) (*blpop, []byte) {
 	}, nil
 }
 
-func (cmd *blpop) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
+func (cmd *blpop) Exec(ctx *types.RequestCtx, s *store.Store) ([]byte, error) {
 	ctx.Dependencies[cmd.key] = true
 
 	if cmd.hasTimeout {

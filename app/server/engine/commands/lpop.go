@@ -4,10 +4,10 @@ import (
 	"strconv"
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/lists"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/types"
 )
 
 type lpop struct {
@@ -38,7 +38,7 @@ func parseLpop(command string, args []string) (*lpop, []byte) {
 	}, nil
 }
 
-func (cmd *lpop) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
+func (cmd *lpop) Exec(ctx *types.RequestCtx, s *store.Store) ([]byte, error) {
 	o, ok := s.Get(cmd.key)
 	if !ok {
 		return resp.NullBulkString, nil

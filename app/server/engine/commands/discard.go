@@ -2,9 +2,9 @@ package commands
 
 import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/types"
 )
 
 type discard struct{}
@@ -17,13 +17,13 @@ func parseDiscard(command string, args []string) (*discard, []byte) {
 	return &discard{}, nil
 }
 
-func (cmd *discard) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
-	if !ctx.Connection.InsideTx {
+func (cmd *discard) Exec(ctx *types.RequestCtx, s *store.Store) ([]byte, error) {
+	if !ctx.Conn.InsideTx {
 		return rediserrors.DiscardWithoutMulti, nil
 	}
 
-	ctx.Connection.InsideTx = false
-	ctx.Connection.TxCommands = nil
+	ctx.Conn.InsideTx = false
+	ctx.Conn.TxCommands = nil
 
 	return resp.SimpleString("OK"), nil
 }

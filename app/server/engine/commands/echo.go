@@ -2,9 +2,9 @@ package commands
 
 import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/types"
 )
 
 type echo struct {
@@ -18,6 +18,6 @@ func parseEcho(command string, args []string) (*echo, []byte) {
 	return &echo{arg: args[0]}, nil
 }
 
-func (cmd *echo) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
+func (cmd *echo) Exec(ctx *types.RequestCtx, s *store.Store) ([]byte, error) {
 	return resp.BulkString(cmd.arg), nil
 }

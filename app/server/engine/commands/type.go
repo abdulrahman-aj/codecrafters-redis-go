@@ -4,11 +4,11 @@ import (
 	"errors"
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/lists"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/streams"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/types"
 )
 
 type typeCmd struct {
@@ -23,7 +23,7 @@ func parseType(command string, args []string) (*typeCmd, []byte) {
 	return &typeCmd{key: args[0]}, nil
 }
 
-func (cmd *typeCmd) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
+func (cmd *typeCmd) Exec(ctx *types.RequestCtx, s *store.Store) ([]byte, error) {
 	o, ok := s.Get(cmd.key)
 	if !ok {
 		return resp.SimpleString("none"), nil

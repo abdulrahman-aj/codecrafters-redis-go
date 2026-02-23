@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/types"
 )
 
 type info struct {
@@ -21,7 +21,7 @@ func parseInfo(command string, args []string) (*info, []byte) {
 	return &info{section: args[0]}, nil
 }
 
-func (cmd *info) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
+func (cmd *info) Exec(ctx *types.RequestCtx, s *store.Store) ([]byte, error) {
 	res := fmt.Sprintf("# Replication\nrole:%s\n", ctx.Info["role"])
 	return resp.BulkString(res), nil
 }

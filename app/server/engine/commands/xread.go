@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/streams"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/types"
 )
 
 type xread struct {
@@ -65,7 +65,7 @@ func parseXread(command string, args []string) (*xread, []byte) {
 	return cmd, nil
 }
 
-func (cmd *xread) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
+func (cmd *xread) Exec(ctx *types.RequestCtx, s *store.Store) ([]byte, error) {
 	if cmd.timeout != 0 {
 		ctx.SetTimeout(cmd.timeout)
 	}

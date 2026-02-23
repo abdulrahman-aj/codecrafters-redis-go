@@ -9,8 +9,8 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/containers"
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/commands"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/types"
 	"github.com/codecrafters-io/redis-starter-go/app/util"
 )
 
@@ -42,7 +42,7 @@ func New(replicaOf string) *Engine {
 }
 
 type envelope struct {
-	ctx        *context.Request
+	ctx        *types.RequestCtx
 	command    string
 	args       []string
 	responseCh chan<- []byte
@@ -78,7 +78,7 @@ func (e *Engine) Run() {
 	}
 }
 
-func (e *Engine) Do(connectionCtx *context.Connection, c any) []byte {
+func (e *Engine) Do(ctx *types.ConnectionCtx, c any) []byte {
 	command, args, ok := parseCommand(c)
 	if !ok {
 		return resp.SimpleError("ERR Protocol error: expected array of bulk strings")
@@ -90,8 +90,8 @@ func (e *Engine) Do(connectionCtx *context.Connection, c any) []byte {
 		responseCh: ch,
 		command:    command,
 		args:       args,
-		ctx: &context.Request{
-			Connection:   connectionCtx,
+		ctx: &types.RequestCtx{
+			Conn:         ctx,
 			RequestID:    e.lastID.Add(1),
 			RequestedAt:  time.Now(),
 			Dependencies: map[string]bool{},
@@ -125,7 +125,7 @@ func (e *Engine) handle(msg *envelope) {
 	e.wakeWaiters(msg.ctx)
 }
 
-func (e *Engine) wakeWaiters(ctx *context.Request) {
+func (e *Engine) wakeWaiters(ctx *types.RequestCtx) {
 	for key := range ctx.TouchedKeys {
 		for _, msg := range e.waitQueue.dequeueWaiters(key) {
 			e.readyQueue.Enqueue(msg)

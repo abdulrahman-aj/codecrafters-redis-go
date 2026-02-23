@@ -4,10 +4,10 @@ import (
 	"errors"
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/streams"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/types"
 )
 
 type xadd struct {
@@ -34,7 +34,7 @@ func parseXadd(command string, args []string) (*xadd, []byte) {
 	return &xadd{key: key, entryID: entryID, kvs: kvs}, nil
 }
 
-func (cmd *xadd) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
+func (cmd *xadd) Exec(ctx *types.RequestCtx, s *store.Store) ([]byte, error) {
 	o, ok := s.Get(cmd.key)
 	if !ok {
 		o = store.Object{Value: streams.Stream{}}
