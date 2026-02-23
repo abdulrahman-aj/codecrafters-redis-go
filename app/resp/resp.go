@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/lists"
+	"github.com/codecrafters-io/redis-starter-go/app/util"
 )
 
 type Reader struct {
@@ -140,13 +141,13 @@ func Array(arr any) []byte {
 			case []byte: // already serialized
 				ret = append(ret, x...)
 			default:
-				panic("TODO: not implemented")
+				util.Fatal("resp.Array not implemented branch")
 			}
 		}
 	case nil:
 		ret = fmt.Appendf(nil, "*%d\r\n", 0)
 	default:
-		panic("TODO: not implemented")
+		util.Fatal("resp.Array not implemented branch")
 	}
 
 	return ret

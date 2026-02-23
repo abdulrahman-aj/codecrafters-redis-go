@@ -3,6 +3,7 @@ package commands
 import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/errors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/lists"
@@ -35,6 +36,6 @@ func (cmd *typeCmd) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 	case streams.Stream:
 		return resp.SimpleString("stream"), nil
 	default:
-		panic("unknown type?")
+		return nil, errors.New("unknown data type for command 'type'")
 	}
 }

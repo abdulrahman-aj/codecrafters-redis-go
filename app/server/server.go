@@ -48,7 +48,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	for {
 		command, err := reader.ReadValue()
-		if err != nil { // TODO: should tell the server to cancel any blocking operations related to this connection
+		if err != nil {
 			if err == io.EOF {
 				break
 			}

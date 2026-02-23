@@ -3,3 +3,4 @@
 - create a slog logger with log level configured from CLI args
 - as of now, TTLs are implemented lazily. consider implementing a more active approach
 - fix slice leaks
+- how to handle client disconnection?
