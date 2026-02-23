@@ -1,6 +1,7 @@
-- consider doing garbage collection, e.g: shrink to fit different data structures, so we're not holding onto memory unnecessiraly
+- consider doing garbage collection
+  - shrink to fit different data structures, so we're not holding onto memory unnecessiraly
+  - TTLs are implemented lazily. consider implementing a more active approach
 - serialization is messy. consider interfaces, generics, or reflection...
 - create a slog logger with log level configured from CLI args
-- as of now, TTLs are implemented lazily. consider implementing a more active approach
 - fix slice leaks
 - how to handle client disconnection?

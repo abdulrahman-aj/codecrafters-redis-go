@@ -20,13 +20,16 @@ type Engine struct {
 	waitQueue  *waitQueue                                         // Requests that are blocked on some key
 	readyQueue *containers.IndexedPriorityQueue[*envelope, int64] // Requests that are potentially unblocked
 	lastID     atomic.Int64                                       // Auto-increment ID for requests
-	info       map[string]string
+	info       *types.Info
 }
 
 func New(replicaOf string) *Engine {
-	info := map[string]string{"role": "master"}
+	info := &types.Info{
+		Role:                "master",
+		MasterReplicationID: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
+	}
 	if replicaOf != "" {
-		info["role"] = "slave"
+		info.Role = "slave"
 	}
 
 	return &Engine{

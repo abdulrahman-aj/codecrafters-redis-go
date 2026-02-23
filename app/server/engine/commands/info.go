@@ -1,7 +1,8 @@
 package commands
 
 import (
-	"fmt"
+	"bytes"
+	"strconv"
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
@@ -22,6 +23,20 @@ func parseInfo(command string, args []string) (*info, []byte) {
 }
 
 func (cmd *info) Exec(ctx *types.RequestCtx, s *store.Store) ([]byte, error) {
-	res := fmt.Sprintf("# Replication\nrole:%s\n", ctx.Info["role"])
-	return resp.BulkString(res), nil
+	kvs := []struct{ k, v string }{
+		{"role", ctx.Info.Role},
+		{"master_replid", ctx.Info.MasterReplicationID},
+		{"master_repl_offset", strconv.Itoa(ctx.Info.MasterReplicationOffset)},
+	}
+
+	var buf bytes.Buffer
+	buf.WriteString("# Replication\n")
+	for _, kv := range kvs {
+		buf.WriteString(kv.k)
+		buf.WriteString(":")
+		buf.WriteString(kv.v)
+		buf.WriteString("\n")
+	}
+
+	return resp.BulkString(buf.String()), nil
 }

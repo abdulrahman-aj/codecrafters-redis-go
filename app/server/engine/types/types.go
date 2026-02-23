@@ -9,7 +9,7 @@ type RequestCtx struct {
 	Deadline     time.Time
 	Dependencies map[string]bool
 	TouchedKeys  map[string]bool
-	Info         map[string]string
+	Info         *Info
 }
 
 func (ctx *RequestCtx) SetTimeout(d time.Duration) {
@@ -37,4 +37,10 @@ type ConnectionCtx struct {
 type TxCommand struct {
 	Command string
 	Args    []string
+}
+
+type Info struct {
+	Role                    string
+	MasterReplicationID     string
+	MasterReplicationOffset int
 }
