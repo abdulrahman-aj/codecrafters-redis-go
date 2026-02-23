@@ -7,7 +7,7 @@ import (
 	"io"
 	"strconv"
 
-	"github.com/codecrafters-io/redis-starter-go/app/server/store/lists"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/lists"
 )
 
 type Reader struct {

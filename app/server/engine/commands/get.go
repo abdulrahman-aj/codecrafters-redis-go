@@ -2,9 +2,9 @@ package commands
 
 import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
-	"github.com/codecrafters-io/redis-starter-go/app/server/context"
-	"github.com/codecrafters-io/redis-starter-go/app/server/errors"
-	"github.com/codecrafters-io/redis-starter-go/app/server/store"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/errors"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 )
 
 type get struct {

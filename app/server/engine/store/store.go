@@ -3,9 +3,9 @@ package store
 import (
 	"time"
 
-	"github.com/codecrafters-io/redis-starter-go/app/server/context"
-	"github.com/codecrafters-io/redis-starter-go/app/server/store/lists"
-	"github.com/codecrafters-io/redis-starter-go/app/server/store/streams"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/lists"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/streams"
 )
 
 type Store struct {
