@@ -3,7 +3,7 @@ package commands
 import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/errors"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/streams"
 )
@@ -14,9 +14,9 @@ type xadd struct {
 	kvs     []string
 }
 
-func parseXadd(command string, args []string) (*xadd, error) {
+func parseXadd(command string, args []string) (*xadd, []byte) {
 	if len(args) < 4 {
-		return nil, errors.NumArgs(command)
+		return nil, rediserrors.NumArgs(command)
 	}
 
 	var (
@@ -26,7 +26,7 @@ func parseXadd(command string, args []string) (*xadd, error) {
 	)
 
 	if len(kvs)%2 != 0 {
-		return nil, errors.NumArgs(command)
+		return nil, rediserrors.NumArgs(command)
 	}
 
 	return &xadd{key: key, entryID: entryID, kvs: kvs}, nil
@@ -40,7 +40,7 @@ func (cmd *xadd) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 
 	stream, ok := o.Value.(streams.Stream)
 	if !ok {
-		return nil, errors.WrongType
+		return rediserrors.WrongType, nil
 	}
 
 	var fields []streams.Field

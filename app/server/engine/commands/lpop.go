@@ -5,7 +5,7 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/errors"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/lists"
 )
@@ -16,9 +16,9 @@ type lpop struct {
 	respondWithArray bool
 }
 
-func parseLpop(command string, args []string) (*lpop, error) {
+func parseLpop(command string, args []string) (*lpop, []byte) {
 	if len(args) == 0 || len(args) > 2 {
-		return nil, errors.NumArgs(command)
+		return nil, rediserrors.NumArgs(command)
 	}
 
 	count := 1
@@ -27,7 +27,7 @@ func parseLpop(command string, args []string) (*lpop, error) {
 		var err error
 		count, err = strconv.Atoi(args[1])
 		if err != nil || count < 0 {
-			return nil, errors.MustBePositive
+			return nil, rediserrors.MustBePositive
 		}
 	}
 
@@ -46,7 +46,7 @@ func (cmd *lpop) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 
 	l, ok := o.Value.(lists.List)
 	if !ok {
-		return nil, errors.WrongType
+		return rediserrors.WrongType, nil
 	}
 
 	count := min(cmd.count, len(l))

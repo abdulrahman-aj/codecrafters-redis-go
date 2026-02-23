@@ -11,6 +11,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/errors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
+	"github.com/codecrafters-io/redis-starter-go/app/util"
 )
 
 type Engine struct {
@@ -95,31 +96,25 @@ func (e *Engine) Do(connectionCtx *context.Connection, c any) []byte {
 }
 
 func (e *Engine) handle(msg *envelope) {
-	cmd, err := commands.Parse(msg.ctx, msg.command, msg.args)
-	if err != nil {
-		e.handleErr(msg, err)
+	cmd, parseRespErr := commands.Parse(msg.ctx, msg.command, msg.args)
+	if parseRespErr != nil {
+		msg.responseCh <- parseRespErr
+		e.wakeWaiters(msg.ctx)
 		return
 	}
 
 	res, err := cmd.Exec(msg.ctx, e.store)
 	if err != nil {
-		e.handleErr(msg, err)
+		if errors.Is(err, errors.Blocked) {
+			e.waitQueue.enqueue(msg)
+		} else {
+			util.FatalOnErr(err)
+		}
 		return
 	}
 
 	msg.responseCh <- res
 	e.wakeWaiters(msg.ctx)
-}
-
-func (e *Engine) handleErr(msg *envelope, err error) {
-	if clientError, ok := err.(*errors.ClientError); ok {
-		msg.responseCh <- clientError.SerializeToResp()
-		e.wakeWaiters(msg.ctx) // TODO: unneeded?
-	} else if errors.Is(err, errors.Blocked) {
-		e.waitQueue.enqueue(msg)
-	} else {
-		panic(err)
-	}
 }
 
 func (e *Engine) wakeWaiters(ctx *context.Request) {

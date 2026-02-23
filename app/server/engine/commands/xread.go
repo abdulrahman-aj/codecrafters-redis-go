@@ -8,6 +8,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/errors"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/streams"
 )
@@ -19,9 +20,9 @@ type xread struct {
 	timeout    time.Duration
 }
 
-func parseXread(command string, args []string) (*xread, error) {
+func parseXread(command string, args []string) (*xread, []byte) {
 	if len(args) < 3 {
-		return nil, errors.NumArgs(command)
+		return nil, rediserrors.NumArgs(command)
 	}
 
 	cmd := &xread{isBlocking: strings.EqualFold(args[0], "block")}
@@ -29,11 +30,11 @@ func parseXread(command string, args []string) (*xread, error) {
 	if cmd.isBlocking {
 		timeoutMs, err := strconv.Atoi(args[1])
 		if err != nil {
-			return nil, errors.TimeoutNotInt
+			return nil, rediserrors.TimeoutNotInt
 		}
 
 		if timeoutMs < 0 {
-			return nil, errors.TimeoutNegative
+			return nil, rediserrors.TimeoutNegative
 		}
 
 		if timeoutMs != 0 {
@@ -44,16 +45,16 @@ func parseXread(command string, args []string) (*xread, error) {
 	}
 
 	if len(args) < 3 { // STREAMS k id
-		return nil, errors.NumArgs(command)
+		return nil, rediserrors.NumArgs(command)
 	}
 
 	if !strings.EqualFold(args[0], "streams") {
-		return nil, errors.SyntaxError
+		return nil, rediserrors.SyntaxError
 	}
 
 	keysAndIDs := args[1:]
 	if len(keysAndIDs)%2 != 0 {
-		return nil, errors.UnbalancedXread
+		return nil, rediserrors.UnbalancedXread
 	}
 
 	numKeys := len(keysAndIDs) / 2
@@ -84,7 +85,7 @@ func (cmd *xread) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 
 		stream, ok := o.Value.(streams.Stream)
 		if !ok {
-			return nil, errors.WrongType
+			return rediserrors.WrongType, nil
 		}
 
 		var (

@@ -7,6 +7,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/errors"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/lists"
 )
@@ -17,14 +18,14 @@ type blpop struct {
 	timeout    time.Duration
 }
 
-func parseBlpop(command string, args []string) (*blpop, error) {
+func parseBlpop(command string, args []string) (*blpop, []byte) {
 	if len(args) != 2 {
-		return nil, errors.NumArgs(command)
+		return nil, rediserrors.NumArgs(command)
 	}
 
 	timeout, err := strconv.ParseFloat(args[1], 64)
 	if err != nil {
-		return nil, errors.TimeoutNotFloat
+		return nil, rediserrors.TimeoutNotFloat
 	}
 
 	return &blpop{

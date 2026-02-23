@@ -120,7 +120,6 @@ func Integer(v int) []byte {
 	return fmt.Appendf(nil, ":%d\r\n", v)
 }
 
-// TODO: messy. consider interfaces, generics, or reflection...
 func Array(arr any) []byte {
 	var ret []byte
 

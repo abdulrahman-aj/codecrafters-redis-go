@@ -10,9 +10,6 @@ import (
 
 type Store struct {
 	data map[string]Object
-	// TODO:
-	// - implement background GC in addition to lazy delete, e.g: by sending a "gc" request to the event loop
-	// - shrink-to-fit?
 }
 
 func New() *Store {

@@ -5,7 +5,7 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/errors"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 )
 
@@ -13,9 +13,9 @@ type incr struct {
 	key string
 }
 
-func parseIncr(command string, args []string) (*incr, error) {
+func parseIncr(command string, args []string) (*incr, []byte) {
 	if len(args) != 1 {
-		return nil, errors.NumArgs(command)
+		return nil, rediserrors.NumArgs(command)
 	}
 
 	return &incr{key: args[0]}, nil
@@ -29,12 +29,12 @@ func (cmd *incr) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 
 	asStr, ok := o.Value.(string)
 	if !ok {
-		return nil, errors.WrongType
+		return rediserrors.WrongType, nil
 	}
 
 	asInt, err := strconv.Atoi(asStr)
 	if err != nil {
-		return nil, errors.InvalidInteger
+		return rediserrors.InvalidInteger, nil
 	}
 
 	asInt++

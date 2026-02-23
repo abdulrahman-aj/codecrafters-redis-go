@@ -5,7 +5,7 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/errors"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/lists"
 )
@@ -16,18 +16,18 @@ type lrange struct {
 	end   int
 }
 
-func parseLrange(command string, args []string) (*lrange, error) {
+func parseLrange(command string, args []string) (*lrange, []byte) {
 	if len(args) != 3 {
-		return nil, errors.NumArgs(command)
+		return nil, rediserrors.NumArgs(command)
 	}
 
 	start, err := strconv.Atoi(args[1])
 	if err != nil {
-		return nil, errors.InvalidInteger
+		return nil, rediserrors.InvalidInteger
 	}
 	end, err := strconv.Atoi(args[2])
 	if err != nil {
-		return nil, errors.InvalidInteger
+		return nil, rediserrors.InvalidInteger
 	}
 
 	return &lrange{key: args[0], start: start, end: end}, nil
@@ -41,7 +41,7 @@ func (cmd *lrange) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 
 	l, ok := o.Value.(lists.List)
 	if !ok {
-		return nil, errors.WrongType
+		return rediserrors.WrongType, nil
 	}
 
 	n := len(l)

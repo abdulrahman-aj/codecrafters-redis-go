@@ -5,7 +5,7 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/errors"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/lists"
 )
@@ -15,9 +15,9 @@ type lpush struct {
 	values []string
 }
 
-func parseLpush(command string, args []string) (*lpush, error) {
+func parseLpush(command string, args []string) (*lpush, []byte) {
 	if len(args) < 2 {
-		return nil, errors.NumArgs(command)
+		return nil, rediserrors.NumArgs(command)
 	}
 
 	return &lpush{key: args[0], values: args[1:]}, nil
@@ -31,7 +31,7 @@ func (cmd *lpush) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 
 	l, ok := o.Value.(lists.List)
 	if !ok {
-		return nil, errors.WrongType
+		return rediserrors.WrongType, nil
 	}
 
 	values := slices.Clone(cmd.values)

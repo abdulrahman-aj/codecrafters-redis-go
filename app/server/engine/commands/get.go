@@ -3,7 +3,7 @@ package commands
 import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/errors"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 )
 
@@ -11,9 +11,9 @@ type get struct {
 	key string
 }
 
-func parseGet(command string, args []string) (*get, error) {
+func parseGet(command string, args []string) (*get, []byte) {
 	if len(args) != 1 {
-		return nil, errors.NumArgs(command)
+		return nil, rediserrors.NumArgs(command)
 	}
 
 	return &get{key: args[0]}, nil
@@ -27,7 +27,7 @@ func (cmd *get) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 
 	valueStr, ok := o.Value.(string)
 	if !ok {
-		return nil, errors.WrongType
+		return rediserrors.WrongType, nil
 	}
 
 	return resp.BulkString(valueStr), nil

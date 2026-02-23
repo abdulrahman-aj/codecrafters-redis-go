@@ -3,7 +3,7 @@ package commands
 import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/errors"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/streams"
 )
@@ -14,9 +14,9 @@ type xrange struct {
 	end   string
 }
 
-func parseXrange(command string, args []string) (*xrange, error) {
+func parseXrange(command string, args []string) (*xrange, []byte) {
 	if len(args) != 3 {
-		return nil, errors.NumArgs(command)
+		return nil, rediserrors.NumArgs(command)
 	}
 
 	return &xrange{key: args[0], start: args[1], end: args[2]}, nil
@@ -30,7 +30,7 @@ func (cmd *xrange) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 
 	stream, ok := o.Value.(streams.Stream)
 	if !ok {
-		return nil, errors.WrongType
+		return rediserrors.WrongType, nil
 	}
 
 	entries, err := stream.Between(cmd.start, cmd.end)

@@ -7,7 +7,7 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/errors"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 )
 
@@ -17,9 +17,9 @@ type set struct {
 	expiresAt time.Time
 }
 
-func parseSet(command string, args []string) (*set, error) {
+func parseSet(command string, args []string) (*set, []byte) {
 	if len(args) != 2 && len(args) != 4 {
-		return nil, errors.NumArgs(command)
+		return nil, rediserrors.NumArgs(command)
 	}
 
 	var expiresAt time.Time
@@ -27,7 +27,7 @@ func parseSet(command string, args []string) (*set, error) {
 	if len(args) == 4 {
 		ttl, err := strconv.Atoi(args[3])
 		if err != nil {
-			return nil, errors.InvalidInteger
+			return nil, rediserrors.InvalidInteger
 		}
 
 		switch strings.ToLower(args[2]) {
@@ -36,7 +36,7 @@ func parseSet(command string, args []string) (*set, error) {
 		case "ex":
 			expiresAt = time.Now().Add(time.Duration(ttl) * time.Second)
 		default:
-			return nil, errors.SyntaxError
+			return nil, rediserrors.SyntaxError
 		}
 	}
 

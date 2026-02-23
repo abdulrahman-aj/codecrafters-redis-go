@@ -3,7 +3,7 @@ package commands
 import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/errors"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/lists"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/streams"
@@ -13,9 +13,9 @@ type typeCmd struct {
 	key string
 }
 
-func parseType(command string, args []string) (*typeCmd, error) {
+func parseType(command string, args []string) (*typeCmd, []byte) {
 	if len(args) != 1 {
-		return nil, errors.NumArgs(command)
+		return nil, rediserrors.NumArgs(command)
 	}
 
 	return &typeCmd{key: args[0]}, nil

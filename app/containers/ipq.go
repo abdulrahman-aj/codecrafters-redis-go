@@ -4,7 +4,6 @@ type LessFunc[V any] func(a, b V) bool
 
 type KeyFunc[V any, K comparable] func(v V) K
 
-// TODO: support shrink-to-fit
 type IndexedPriorityQueue[V any, K comparable] struct {
 	heap  []V         // heap-ordered values
 	pos   map[K]int   // key -> index in heap

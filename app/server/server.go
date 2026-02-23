@@ -10,7 +10,6 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 )
 
-// TODO: slog...
 type Server struct {
 	listener net.Listener
 	engine   *engine.Engine

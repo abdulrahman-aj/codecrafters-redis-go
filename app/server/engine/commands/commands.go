@@ -3,7 +3,7 @@ package commands
 import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/errors"
+	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 )
 
@@ -11,7 +11,7 @@ type Command interface {
 	Exec(ctx *context.Request, s *store.Store) ([]byte, error)
 }
 
-func Parse(ctx *context.Request, command string, args []string) (Command, error) {
+func Parse(ctx *context.Request, command string, args []string) (Command, []byte) {
 	switch command {
 	case "multi":
 		return parseMulti(command, args)
@@ -57,7 +57,7 @@ func Parse(ctx *context.Request, command string, args []string) (Command, error)
 	case "incr":
 		return parseIncr(command, args)
 	default:
-		return nil, errors.UknownCommand(command)
+		return nil, rediserrors.UknownCommand(command)
 	}
 }
 
