@@ -1,6 +1,8 @@
 package commands
 
 import (
+	"fmt"
+
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
@@ -20,5 +22,6 @@ func parseInfo(command string, args []string) (*info, []byte) {
 }
 
 func (cmd *info) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
-	return resp.BulkString("# Replication\nrole:master\n"), nil
+	res := fmt.Sprintf("# Replication\nrole:%s\n", ctx.Info["role"])
+	return resp.BulkString(res), nil
 }

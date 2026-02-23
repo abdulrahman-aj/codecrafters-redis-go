@@ -20,9 +20,15 @@ type Engine struct {
 	waitQueue  *waitQueue                                         // Requests that are blocked on some key
 	readyQueue *containers.IndexedPriorityQueue[*envelope, int64] // Requests that are potentially unblocked
 	lastID     atomic.Int64                                       // Auto-increment ID for requests
+	info       map[string]string
 }
 
-func New() *Engine {
+func New(replicaOf string) *Engine {
+	info := map[string]string{"role": "master"}
+	if replicaOf != "" {
+		info["role"] = "slave"
+	}
+
 	return &Engine{
 		inbox:     make(chan *envelope),
 		store:     store.New(),
@@ -31,6 +37,7 @@ func New() *Engine {
 			(*envelope).key,
 			(*envelope).before,
 		),
+		info: info,
 	}
 }
 
@@ -89,6 +96,7 @@ func (e *Engine) Do(connectionCtx *context.Connection, c any) []byte {
 			RequestedAt:  time.Now(),
 			Dependencies: map[string]bool{},
 			TouchedKeys:  map[string]bool{},
+			Info:         e.info,
 		},
 	}
 

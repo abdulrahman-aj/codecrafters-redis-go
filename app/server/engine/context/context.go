@@ -9,6 +9,7 @@ type Request struct {
 	Deadline     time.Time
 	Dependencies map[string]bool
 	TouchedKeys  map[string]bool
+	Info         map[string]string
 }
 
 func (ctx *Request) SetTimeout(d time.Duration) {

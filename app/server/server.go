@@ -15,7 +15,7 @@ type Server struct {
 	engine   *engine.Engine
 }
 
-func New(ip string, port int) (*Server, error) {
+func New(ip string, port int, replicaOf string) (*Server, error) {
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", ip, port))
 	if err != nil {
 		return nil, err
@@ -23,7 +23,7 @@ func New(ip string, port int) (*Server, error) {
 
 	return &Server{
 		listener: listener,
-		engine:   engine.New(),
+		engine:   engine.New(replicaOf),
 	}, nil
 }
 
