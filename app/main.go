@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	fmt.Println("logs should appear hear...")
+	fmt.Println("logs should appear here...")
 
 	server, err := server.New("0.0.0.0", "6379")
 	if err != nil {

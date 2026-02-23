@@ -1,13 +1,13 @@
 package commands
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/errors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/streams"
@@ -120,7 +120,7 @@ func (cmd *xread) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 			return resp.NullArray, nil
 		}
 
-		return nil, errors.Blocked
+		return nil, ErrBlocked
 	}
 
 	return resp.Array(ret), nil

@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"errors"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -9,7 +10,6 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/commands"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/errors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 	"github.com/codecrafters-io/redis-starter-go/app/util"
 )
@@ -105,7 +105,7 @@ func (e *Engine) handle(msg *envelope) {
 
 	res, err := cmd.Exec(msg.ctx, e.store)
 	if err != nil {
-		if errors.Is(err, errors.Blocked) {
+		if errors.Is(err, commands.ErrBlocked) {
 			e.waitQueue.enqueue(msg)
 		} else {
 			util.FatalOnErr(err)

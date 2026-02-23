@@ -1,9 +1,10 @@
 package commands
 
 import (
+	"errors"
+
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
-	"github.com/codecrafters-io/redis-starter-go/app/server/engine/errors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store"
 	"github.com/codecrafters-io/redis-starter-go/app/util"
@@ -41,8 +42,8 @@ func (cmd *exec) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 		res, err := cmd.Exec(ctx, s)
 		if err != nil {
 			util.Assert(
-				!errors.Is(err, errors.Blocked),
-				"commands should never return errors.Blocked inside a transaction",
+				!errors.Is(err, ErrBlocked),
+				"commands should never return ErrBlocked inside a transaction",
 			)
 			return nil, err
 		}

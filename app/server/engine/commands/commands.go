@@ -1,6 +1,8 @@
 package commands
 
 import (
+	"errors"
+
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/context"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/rediserrors"
@@ -71,3 +73,8 @@ func (cmd *txQueue) Exec(ctx *context.Request, s *store.Store) ([]byte, error) {
 	ctx.Connection.TxCommands = append(ctx.Connection.TxCommands, txCommand)
 	return resp.SimpleString("QUEUED"), nil
 }
+
+// A special error value that indicates whether an operation
+// is waiting on something or not. e.g: BLPOP
+// Note: commands inside a transaction should never return ErrBlocked
+var ErrBlocked = errors.New("command blocked waiting on something")
