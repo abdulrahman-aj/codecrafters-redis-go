@@ -6,8 +6,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/types"
 )
 
-type replConf struct {
-}
+type replConf struct{}
 
 func parseReplConf(command string, args []string) (*replConf, []byte) {
 	return &replConf{}, nil

@@ -62,6 +62,8 @@ func Parse(ctx *types.RequestCtx, command string, args []string) (Command, []byt
 		return parseInfo(command, args)
 	case "replconf":
 		return parseReplConf(command, args)
+	case "psync":
+		return parsePsync(command, args)
 	default:
 		return nil, rediserrors.UknownCommand(command)
 	}
