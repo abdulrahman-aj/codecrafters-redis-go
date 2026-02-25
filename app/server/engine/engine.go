@@ -132,12 +132,17 @@ func (e *Engine) handle(msg *envelope) {
 		return
 	}
 
-	e.wakeWaiters(msg.ctx)
-	e.beforeRespond(msg)
 	e.respond(msg, res)
 }
 
 func (e *Engine) respond(msg *envelope, res []byte) {
+	if msg.ctx.Conn.IsReplicaConn && !msg.ctx.Conn.IsReplicaRegistered {
+		e.registerReplica(msg)
+	}
+	e.replicate(msg)
+	e.wakeWaiters(msg.ctx)
+	e.updateOffset(msg)
+
 	if !msg.ctx.Conn.IsMasterConn || msg.ctx.MustRespond {
 		msg.responseCh <- res
 	} else {
@@ -145,23 +150,19 @@ func (e *Engine) respond(msg *envelope, res []byte) {
 	}
 }
 
-func (e *Engine) beforeRespond(msg *envelope) {
-	if msg.ctx.Conn.IsReplicaConn && !msg.ctx.Conn.IsReplicaRegistered {
-		msg.ctx.Conn.IsReplicaRegistered = true
+func (e *Engine) registerReplica(msg *envelope) {
+	msg.ctx.Conn.IsReplicaRegistered = true
 
-		replicationCh := make(chan []byte, 1000)
-		done := make(chan struct{})
+	replicationCh := make(chan []byte, 1000)
+	done := make(chan struct{})
 
-		msg.ctx.Conn.ReplicationCh = replicationCh
-		msg.ctx.Conn.ReplicationDone = done
+	msg.ctx.Conn.ReplicationCh = replicationCh
+	msg.ctx.Conn.ReplicationDone = done
 
-		e.replicas[msg.ctx.Conn.ID] = replica{
-			replicationCh: replicationCh,
-			done:          done,
-		}
+	e.replicas[msg.ctx.Conn.ID] = replica{
+		replicationCh: replicationCh,
+		done:          done,
 	}
-
-	e.replicate(msg)
 }
 
 func (e *Engine) replicate(msg *envelope) {
@@ -183,6 +184,12 @@ func (e *Engine) replicate(msg *envelope) {
 	for _, id := range deadReplicas {
 		delete(e.replicas, id)
 	}
+}
+
+func (e *Engine) updateOffset(msg *envelope) {
+	// TOOD: can optimize and get num bytes from resp.Reader.ReadValue but life is too short...
+	requestBytes := resp.Array(append([]string{msg.command}, msg.args...))
+	e.Config.MasterReplicationOffset += len(requestBytes)
 }
 
 func (e *Engine) wakeWaiters(ctx *types.RequestCtx) {

@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
@@ -25,7 +26,11 @@ func parseReplConf(command string, args []string) (*replConf, []byte) {
 func (cmd *replConf) Exec(ctx *types.RequestCtx, s *store.Store) ([]byte, error) {
 	if strings.EqualFold(cmd.key, "getack") {
 		ctx.MustRespond = true
-		return resp.Array([]string{"REPLCONF", "ACK", "0"}), nil
+		return resp.Array([]string{
+			"REPLCONF",
+			"ACK",
+			strconv.Itoa(ctx.ServerCfg.MasterReplicationOffset),
+		}), nil
 	}
 
 	return resp.SimpleString("OK"), nil
