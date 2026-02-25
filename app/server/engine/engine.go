@@ -119,7 +119,6 @@ func (e *Engine) handle(msg *envelope) {
 	cmd, parseRespErr := commands.Parse(msg.ctx, msg.command, msg.args)
 	if parseRespErr != nil {
 		e.respond(msg, parseRespErr)
-		e.wakeWaiters(msg.ctx)
 		return
 	}
 
@@ -133,20 +132,20 @@ func (e *Engine) handle(msg *envelope) {
 		return
 	}
 
-	e.respond(msg, res)
 	e.wakeWaiters(msg.ctx)
-	e.afterCommand(msg)
+	e.beforeRespond(msg)
+	e.respond(msg, res)
 }
 
 func (e *Engine) respond(msg *envelope, res []byte) {
-	if msg.ctx.Conn.IsMasterConn {
-		msg.responseCh <- nil
-	} else {
+	if !msg.ctx.Conn.IsMasterConn || msg.ctx.MustRespond {
 		msg.responseCh <- res
+	} else {
+		msg.responseCh <- nil
 	}
 }
 
-func (e *Engine) afterCommand(msg *envelope) {
+func (e *Engine) beforeRespond(msg *envelope) {
 	if msg.ctx.Conn.IsReplicaConn && !msg.ctx.Conn.IsReplicaRegistered {
 		msg.ctx.Conn.IsReplicaRegistered = true
 

@@ -10,6 +10,7 @@ type RequestCtx struct {
 	Dependencies map[string]bool
 	TouchedKeys  map[string]bool
 	ServerCfg    *Config
+	MustRespond  bool
 }
 
 func (ctx *RequestCtx) SetTimeout(d time.Duration) {

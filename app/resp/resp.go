@@ -38,6 +38,29 @@ func (r *Reader) ReadValue() (any, error) {
 
 }
 
+func (r *Reader) ReadRDB() (string, error) {
+	c, err := r.reader.ReadByte()
+	if err != nil {
+		return "", err
+	}
+
+	if c != '$' {
+		return "", fmt.Errorf("expected RDB file to start with $. found %c", c)
+	}
+
+	strLength, err := readLength(r.reader)
+	if err != nil {
+		return "", err
+	}
+
+	buf := make([]byte, strLength)
+	if _, err := io.ReadFull(r.reader, buf); err != nil {
+		return "", fmt.Errorf("failed to read RDB of length %d", strLength)
+	}
+
+	return string(buf), nil
+}
+
 func (r *Reader) readArray() ([]any, error) {
 	arrayLength, err := readLength(r.reader)
 	if err != nil {

@@ -19,6 +19,14 @@ type Server struct {
 	lastID   atomic.Int64
 }
 
+// can't create multiple resp.Readers for a single client
+// since an earlier reader may have consumed some bytes from conn
+// which will lead to non-deterministic errors in the second reader.
+type client struct {
+	conn   net.Conn
+	reader *resp.Reader
+}
+
 func New(ip string, listeningPort int, masterAddress *types.Address) (*Server, error) {
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", ip, listeningPort))
 	if err != nil {
@@ -46,16 +54,18 @@ func (s *Server) Serve() error {
 			return err
 		}
 
-		go s.handleConnection(conn, &types.ConnectionCtx{ID: s.lastID.Add(1)})
+		go s.handleConnection(
+			&client{conn: conn, reader: resp.NewReader(conn)},
+			&types.ConnectionCtx{ID: s.lastID.Add(1)},
+		)
 	}
 }
 
-func (s *Server) handleConnection(conn net.Conn, ctx *types.ConnectionCtx) {
-	defer conn.Close()
-	reader := resp.NewReader(conn)
+func (s *Server) handleConnection(c *client, ctx *types.ConnectionCtx) {
+	defer c.conn.Close()
 
 	for {
-		command, err := reader.ReadValue()
+		command, err := c.reader.ReadValue()
 		if err != nil {
 			if err != io.EOF {
 				fmt.Println("Error reading from connection: ", err.Error())
@@ -64,19 +74,19 @@ func (s *Server) handleConnection(conn net.Conn, ctx *types.ConnectionCtx) {
 			break
 		}
 
-		if _, err := conn.Write(s.engine.Do(ctx, command)); err != nil {
+		if _, err := c.conn.Write(s.engine.Do(ctx, command)); err != nil {
 			fmt.Println("Error writing to connection: ", err.Error())
 			break
 		}
 
 		if ctx.IsReplicaConn {
-			s.handleReplica(conn, ctx)
+			s.handleReplica(c, ctx)
 			break
 		}
 	}
 }
 
-func (s *Server) handleReplica(conn net.Conn, ctx *types.ConnectionCtx) {
+func (s *Server) handleReplica(c *client, ctx *types.ConnectionCtx) {
 	util.Assert(
 		ctx.IsReplicaConn && ctx.IsReplicaRegistered && ctx.ReplicationCh != nil,
 		"handleReplica running without subscribing to replication log",
@@ -84,7 +94,7 @@ func (s *Server) handleReplica(conn net.Conn, ctx *types.ConnectionCtx) {
 
 	for req := range ctx.ReplicationCh {
 		err := util.Retry(func() error {
-			_, err := conn.Write(req)
+			_, err := c.conn.Write(req)
 			return err
 		}, 3)
 
@@ -95,7 +105,7 @@ func (s *Server) handleReplica(conn net.Conn, ctx *types.ConnectionCtx) {
 	}
 }
 
-func connectToMaster(listeningPort int, address *types.Address) (net.Conn, error) {
+func connectToMaster(listeningPort int, address *types.Address) (*client, error) {
 	if address == nil {
 		return nil, nil
 	}
@@ -107,27 +117,45 @@ func connectToMaster(listeningPort int, address *types.Address) (net.Conn, error
 
 	reader := resp.NewReader(conn)
 
-	// TODO: check responses
+	// a bit ugly...
 	handshake := [][]string{
-		{"PING"}, // OK
-		{"REPLCONF", "listening-port", strconv.Itoa(listeningPort)}, // OK
-		{"REPLCONF", "capa", "psync2"},                              // OK
-		{"PSYNC", "?", "-1"},                                        // FULLRESYNC
+		{"PING"}, // TODO: assert OK
+		{"REPLCONF", "listening-port", strconv.Itoa(listeningPort)}, // assert OK
+		{"REPLCONF", "capa", "psync2"},                              // assert OK
 	}
 
-	for _, args := range handshake {
-		req := resp.Array(args)
+	err = func() error {
+		for _, args := range handshake {
+			req := resp.Array(args)
 
-		if _, err := conn.Write(req); err != nil {
-			conn.Close()
-			return nil, err
+			if _, err := conn.Write(req); err != nil {
+				return err
+			}
+
+			if _, err := reader.ReadValue(); err != nil {
+				return err
+			}
+		}
+
+		if _, err := conn.Write(resp.Array([]string{"PSYNC", "?", "-1"})); err != nil {
+			return err
 		}
 
 		if _, err := reader.ReadValue(); err != nil {
-			conn.Close()
-			return nil, err
+			return err
 		}
+
+		if _, err := reader.ReadRDB(); err != nil {
+			return err
+		}
+
+		return nil
+	}()
+
+	if err != nil {
+		conn.Close()
+		return nil, err
 	}
 
-	return conn, nil
+	return &client{conn: conn, reader: reader}, nil
 }
