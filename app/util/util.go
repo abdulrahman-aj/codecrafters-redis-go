@@ -17,3 +17,14 @@ func FatalOnErr(err error) {
 		log.Fatal(err.Error())
 	}
 }
+
+func Retry(f func() error, n int) error {
+	var err error
+	for range n {
+		err = f()
+		if err == nil {
+			return nil
+		}
+	}
+	return err
+}

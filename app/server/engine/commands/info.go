@@ -24,9 +24,13 @@ func parseInfo(command string, args []string) (*info, []byte) {
 
 func (cmd *info) Exec(ctx *types.RequestCtx, s *store.Store) ([]byte, error) {
 	kvs := []struct{ k, v string }{
-		{"role", ctx.Info.Role},
-		{"master_replid", ctx.Info.MasterReplicationID},
-		{"master_repl_offset", strconv.Itoa(ctx.Info.MasterReplicationOffset)},
+		{"role", "master"},
+		{"master_replid", ctx.ServerCfg.MasterReplicationID},
+		{"master_repl_offset", strconv.Itoa(ctx.ServerCfg.MasterReplicationOffset)},
+	}
+
+	if !ctx.ServerCfg.IsMaster {
+		kvs[0].v = "slave"
 	}
 
 	var buf bytes.Buffer

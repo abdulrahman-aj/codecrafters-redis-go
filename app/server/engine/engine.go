@@ -2,9 +2,6 @@ package engine
 
 import (
 	"errors"
-	"fmt"
-	"net"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -23,27 +20,17 @@ type Engine struct {
 	waitQueue  *waitQueue                                         // Requests that are blocked on some key
 	readyQueue *containers.IndexedPriorityQueue[*envelope, int64] // Requests that are potentially unblocked
 	lastID     atomic.Int64                                       // Auto-increment ID for requests
-	info       *types.Info
+	Config     *types.Config
+	replicas   map[int64]replica
 }
 
-func New(port int, replicaOf string) *Engine {
-	info := &types.Info{
-		Port:                port,
-		Role:                "master",
-		MasterReplicationID: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
-	}
+type replica struct {
+	replicationCh chan<- []byte
+	done          <-chan struct{}
+}
 
-	if replicaOf != "" {
-		info.Role = "slave"
-
-		parts := strings.Split(replicaOf, " ")
-		util.Assert(len(parts) == 2, `replica address in the format "<MASTER_HOST> <MASTER_PORT>"`)
-
-		info.MasterIP = parts[0]
-		info.MasterPort = parts[1]
-	}
-
-	return &Engine{
+func New(isMaster bool) *Engine {
+	e := &Engine{
 		inbox:     make(chan *envelope),
 		store:     store.New(),
 		waitQueue: newWaitQueue(),
@@ -51,8 +38,16 @@ func New(port int, replicaOf string) *Engine {
 			(*envelope).key,
 			(*envelope).before,
 		),
-		info: info,
+		Config: &types.Config{
+			IsMaster:                isMaster,
+			MasterReplicationID:     "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
+			MasterReplicationOffset: 0,
+		},
+		replicas: map[int64]replica{},
 	}
+
+	go e.run()
+	return e
 }
 
 type envelope struct {
@@ -68,13 +63,10 @@ func (e *envelope) before(other *envelope) bool {
 	return e.ctx.RequestedAt.Before(other.ctx.RequestedAt)
 }
 
-func (e *Engine) Run() {
-	if e.info.MasterIP != "" {
-		util.FatalOnErr(e.connectToMaster()) // TODO: handle connect to master error
-	}
-
+func (e *Engine) run() {
 	nextTimeout := time.NewTimer(0)
 
+	// TODO: cleanup this loop. extract methods...
 	for {
 		select {
 		case msg := <-e.inbox:
@@ -114,7 +106,7 @@ func (e *Engine) Do(ctx *types.ConnectionCtx, c any) []byte {
 			RequestedAt:  time.Now(),
 			Dependencies: map[string]bool{},
 			TouchedKeys:  map[string]bool{},
-			Info:         e.info,
+			ServerCfg:    e.Config,
 		},
 	}
 
@@ -122,6 +114,8 @@ func (e *Engine) Do(ctx *types.ConnectionCtx, c any) []byte {
 }
 
 func (e *Engine) handle(msg *envelope) {
+	util.Assert(!msg.ctx.Conn.IsReplicaConn, "should not send any commands while replicating")
+
 	cmd, parseRespErr := commands.Parse(msg.ctx, msg.command, msg.args)
 	if parseRespErr != nil {
 		msg.responseCh <- parseRespErr
@@ -141,6 +135,47 @@ func (e *Engine) handle(msg *envelope) {
 
 	msg.responseCh <- res
 	e.wakeWaiters(msg.ctx)
+	e.afterCommand(msg)
+}
+
+func (e *Engine) afterCommand(msg *envelope) {
+	if msg.ctx.Conn.IsReplicaConn && !msg.ctx.Conn.IsReplicaRegistered {
+		msg.ctx.Conn.IsReplicaRegistered = true
+
+		replicationCh := make(chan []byte, 1000)
+		done := make(chan struct{})
+
+		msg.ctx.Conn.ReplicationCh = replicationCh
+		msg.ctx.Conn.ReplicationDone = done
+
+		e.replicas[msg.ctx.Conn.ID] = replica{
+			replicationCh: replicationCh,
+			done:          done,
+		}
+	}
+
+	e.replicate(msg)
+}
+
+func (e *Engine) replicate(msg *envelope) {
+	if len(msg.ctx.TouchedKeys) == 0 { // no state change -> nothing to replicate
+		return
+	}
+
+	var deadReplicas []int64
+
+	req := resp.Array(append([]string{msg.command}, msg.args...))
+	for id, r := range e.replicas {
+		select {
+		case r.replicationCh <- req:
+		case <-r.done:
+			deadReplicas = append(deadReplicas, id)
+		}
+	}
+
+	for _, id := range deadReplicas {
+		delete(e.replicas, id)
+	}
 }
 
 func (e *Engine) wakeWaiters(ctx *types.RequestCtx) {
@@ -171,39 +206,4 @@ func parseCommand(v any) (string, []string, bool) {
 	}
 
 	return strings.ToLower(ret[0]), ret[1:], true
-}
-
-func (e *Engine) connectToMaster() error {
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%s", e.info.MasterIP, e.info.MasterPort))
-	if err != nil {
-		return err
-	}
-
-	reader := resp.NewReader(conn)
-	send := func(bytes []byte) error { // ignoring responses for now
-		if _, err := conn.Write(bytes); err != nil {
-			return err
-		}
-
-		_, err := reader.ReadValue()
-		return err
-	}
-
-	if err := send(resp.Array([]string{"PING"})); err != nil { // TODO: expect OK
-		return err
-	}
-
-	if err := send(resp.Array([]string{"REPLCONF", "listening-port", strconv.Itoa(e.info.Port)})); err != nil { // TODO: expect OK
-		return err
-	}
-
-	if err := send(resp.Array([]string{"REPLCONF", "capa", "psync2"})); err != nil { // TODO: expect OK
-		return err
-	}
-
-	if err := send(resp.Array([]string{"PSYNC", "?", "-1"})); err != nil { // TODO: expect FULLRESYNC...
-		return err
-	}
-
-	return nil
 }

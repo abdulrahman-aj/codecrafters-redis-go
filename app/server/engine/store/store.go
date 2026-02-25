@@ -6,6 +6,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/lists"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/store/streams"
 	"github.com/codecrafters-io/redis-starter-go/app/server/engine/types"
+	"github.com/codecrafters-io/redis-starter-go/app/util"
 )
 
 type Store struct {
@@ -31,6 +32,8 @@ func (s *Store) Get(key string) (Object, bool) {
 }
 
 func (s *Store) Set(ctx *types.RequestCtx, key string, o Object) {
+	util.Assert(ctx.ServerCfg.IsMaster || ctx.Conn.IsMasterConn, "only master can write to replicas...")
+
 	ctx.TouchedKeys[key] = true
 
 	switch v := o.Value.(type) {

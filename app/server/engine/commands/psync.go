@@ -24,7 +24,8 @@ func parsePsync(command string, args []string) (*psync, []byte) {
 }
 
 func (cmd *psync) Exec(ctx *types.RequestCtx, s *store.Store) ([]byte, error) {
-	msg := resp.SimpleString(fmt.Sprintf("FULLRESYNC %s %d", ctx.Info.MasterReplicationID, ctx.Info.MasterReplicationOffset))
+	ctx.Conn.IsReplicaConn = true
+	msg := resp.SimpleString(fmt.Sprintf("FULLRESYNC %s %d", ctx.ServerCfg.MasterReplicationID, ctx.ServerCfg.MasterReplicationOffset))
 	msg = fmt.Appendf(msg, "$%d\r\n%s", len(emptyRDB), emptyRDB)
 	return msg, nil
 }

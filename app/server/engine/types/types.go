@@ -9,7 +9,7 @@ type RequestCtx struct {
 	Deadline     time.Time
 	Dependencies map[string]bool
 	TouchedKeys  map[string]bool
-	Info         *Info
+	ServerCfg    *Config
 }
 
 func (ctx *RequestCtx) SetTimeout(d time.Duration) {
@@ -30,8 +30,20 @@ func (ctx *RequestCtx) DeadlineExceeded() bool {
 func (ctx *RequestCtx) HasDeadline() bool { return !ctx.Deadline.IsZero() }
 
 type ConnectionCtx struct {
-	InsideTx   bool
-	TxCommands []TxCommand
+	ID           int64
+	InsideTx     bool
+	TxCommands   []TxCommand
+	IsMasterConn bool
+
+	// Only initialized after issuing psync
+	IsReplicaConn       bool
+	IsReplicaRegistered bool
+
+	// This channel will be used to subscribe to write commands
+	// that the engine executes.
+	// Only initialized after issuing psync
+	ReplicationCh   <-chan []byte
+	ReplicationDone chan<- struct{}
 }
 
 type TxCommand struct {
@@ -39,11 +51,13 @@ type TxCommand struct {
 	Args    []string
 }
 
-type Info struct {
-	Port                    int
-	Role                    string
+type Config struct {
+	IsMaster                bool
 	MasterReplicationID     string
 	MasterReplicationOffset int
-	MasterIP                string
-	MasterPort              string
+}
+
+type Address struct {
+	Host string
+	Port string
 }
