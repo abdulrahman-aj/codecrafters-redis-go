@@ -133,7 +133,12 @@ func (e *Engine) handle(msg *envelope) {
 		return
 	}
 
-	msg.responseCh <- res
+	if msg.ctx.Conn.IsMasterConn {
+		msg.responseCh <- nil
+	} else {
+		msg.responseCh <- res
+	}
+
 	e.wakeWaiters(msg.ctx)
 	e.afterCommand(msg)
 }
