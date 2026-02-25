@@ -118,7 +118,7 @@ func (e *Engine) handle(msg *envelope) {
 
 	cmd, parseRespErr := commands.Parse(msg.ctx, msg.command, msg.args)
 	if parseRespErr != nil {
-		msg.responseCh <- parseRespErr
+		e.respond(msg, parseRespErr)
 		e.wakeWaiters(msg.ctx)
 		return
 	}
@@ -133,14 +133,17 @@ func (e *Engine) handle(msg *envelope) {
 		return
 	}
 
+	e.respond(msg, res)
+	e.wakeWaiters(msg.ctx)
+	e.afterCommand(msg)
+}
+
+func (e *Engine) respond(msg *envelope, res []byte) {
 	if msg.ctx.Conn.IsMasterConn {
 		msg.responseCh <- nil
 	} else {
 		msg.responseCh <- res
 	}
-
-	e.wakeWaiters(msg.ctx)
-	e.afterCommand(msg)
 }
 
 func (e *Engine) afterCommand(msg *envelope) {
